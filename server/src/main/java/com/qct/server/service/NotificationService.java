@@ -88,12 +88,34 @@ public class NotificationService {
                 return queryUserIds("status IN ('department_selection', 'accepted')");
             case "accepted":
                 return queryUserIds("status = 'accepted'");
+            case "first_reject":
+                return queryUserIds("status = 'first_reject'");
+            case "rejected":
+                return queryUserIds("status = 'rejected'");
+            case "interviewed":
+                return queryInterviewedUserIds("first", "waiting_first");
             case "first_interview":
             case "second_interview":
                 return queryUserIds("1=1");
             default:
                 return List.of();
         }
+    }
+
+    /** 已面试用户：状态 waiting_* 且对应面试 JSON 列为 completed */
+    private List<String> queryInterviewedUserIds(String which, String status) {
+        String col = "first".equals(which) ? "first_interview" : "second_interview";
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT DISTINCT user_id FROM applications WHERE status = ? AND JSON_EXTRACT(" + col + ", '$.status') = 'completed' AND user_id IS NOT NULL AND user_id <> ''",
+                status);
+        List<String> ids = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            String id = String.valueOf(row.get("user_id"));
+            if (!id.isBlank()) {
+                ids.add(id);
+            }
+        }
+        return ids;
     }
 
     private List<String> queryUserIds(String where) {

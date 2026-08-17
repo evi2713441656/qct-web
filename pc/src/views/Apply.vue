@@ -157,10 +157,20 @@
           <el-form-item label="自我介绍" prop="introduction">
             <el-input v-model="form.introduction" type="textarea" :rows="4" placeholder="介绍一下你自己，让我们更了解你" maxlength="1000" show-word-limit />
           </el-form-item>
+          <el-form-item prop="hasConsented">
+            <el-checkbox v-model="form.hasConsented">
+              我已阅读并同意《用户协议》和《隐私政策》
+            </el-checkbox>
+          </el-form-item>
           <el-form-item>
-            <el-button type="primary" native-type="submit" :loading="submitting">提交报名</el-button>
+            <el-button type="primary" native-type="submit" :loading="submitting" :disabled="!applicationOpen">
+              {{ applicationOpen ? '提交报名' : '报名时间未开放' }}
+            </el-button>
             <el-button v-if="editing" @click="cancelEdit">取消修改</el-button>
           </el-form-item>
+          <div v-if="!applicationOpen" class="muted" style="font-size: 13px;">
+            当前不在报名时间内（{{ formatTime(config.applicationStartTime) }} 至 {{ formatTime(config.applicationEndTime) }}）
+          </div>
         </el-form>
       </div>
     </template>
@@ -193,7 +203,7 @@ const checkingIn = ref('')
 
 const form = ref({
   name: '', studentId: '', gender: '男', major: '', dormitory: '', phone: '',
-  departments: [], introduction: ''
+  departments: [], introduction: '', hasConsented: false
 })
 
 const rules = {
@@ -201,8 +211,23 @@ const rules = {
   studentId: [{ required: true, message: '请输入学号', trigger: 'blur' }],
   departments: [{ required: true, type: 'array', min: 1, message: '请至少选择一个部门', trigger: 'change' }],
   introduction: [{ required: true, message: '请填写自我介绍', trigger: 'blur' }],
-  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }]
+  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '请输入正确的手机号', trigger: 'blur' }],
+  hasConsented: [{
+    validator: (rule, value, callback) => {
+      if (!value) callback(new Error('请先同意用户协议和隐私政策'))
+      else callback()
+    },
+    trigger: 'change'
+  }]
 }
+
+const applicationOpen = computed(() => {
+  const s = config.value.applicationStartTime
+  const e = config.value.applicationEndTime
+  if (!s || !e) return true
+  const now = Date.now()
+  return now >= new Date(s).getTime() && now <= new Date(e).getTime()
+})
 
 const config = ref({})
 const departmentOptions = ref([])
@@ -285,7 +310,8 @@ const loadApplication = async () => {
         dormitory: application.value.dormitory || '',
         phone: application.value.phone || '',
         departments: application.value.departments || [],
-        introduction: application.value.introduction || ''
+        introduction: application.value.introduction || '',
+        hasConsented: true
       }
     }
   } catch (e) {
@@ -295,6 +321,10 @@ const loadApplication = async () => {
 }
 
 const handleSubmit = async () => {
+  if (!applicationOpen.value) {
+    ElMessage.warning('当前不在报名时间内')
+    return
+  }
   try {
     await formRef.value.validate()
   } catch {

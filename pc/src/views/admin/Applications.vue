@@ -12,6 +12,7 @@
         </el-select>
         <el-input v-model="filters.keyword" placeholder="搜索姓名 / 学号" clearable style="width: 200px;" @input="onSearch" />
         <el-button type="primary" @click="exportCsv">导出 CSV</el-button>
+        <el-button type="warning" @click="notifyVisible = true">发送通知</el-button>
         <el-button @click="load()">刷新</el-button>
       </div>
 
@@ -160,16 +161,19 @@
         <el-button type="primary" @click="confirmPass">确认</el-button>
       </template>
     </el-dialog>
+
+    <NotificationDialog v-model="notifyVisible" />
   </div>
 </template>
 
 <script setup>
 import { ref, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { listApplications, updateStatus, updateApplicationInfo, updateInterviewStatus } from '../../api/application.js'
+import { listApplications, updateStatus, updateApplicationInfo } from '../../api/application.js'
 import { getSystemConfigAdmin } from '../../api/admin.js'
 import { STATUS_OPTIONS, getStatusText, deriveStatus } from '../../utils/status.js'
 import { formatTime, listText } from '../../utils/format.js'
+import NotificationDialog from '../../components/NotificationDialog.vue'
 
 const list = ref([])
 const total = ref(0)
@@ -188,6 +192,7 @@ const passVisible = ref(false)
 const passBatch = ref(false)
 const passDepartments = ref([])
 const passTarget = ref(null)
+const notifyVisible = ref(false)
 
 const load = async (p) => {
   if (p) page.value = p

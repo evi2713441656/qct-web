@@ -79,7 +79,7 @@ public class ApplicationService {
 
     // ---------------------------------------------------------------- 通知
 
-    /** 当前用户的通知（user_notifications） */
+    /** 当前用户的通知（user_notifications + 全站通知 type=all） */
     private Map<String, Object> myNotifications(Map<String, Object> event) {
         String userId = resolveUserId(event);
         if (userId == null) {
@@ -99,6 +99,20 @@ public class ApplicationService {
             item.put("createdAt", Times.iso(toLong(row.get("created_at"))));
             list.add(item);
         }
+        List<Map<String, Object>> allRows = jdbc.queryForList(
+                "SELECT * FROM notifications WHERE type = 'all' ORDER BY created_at DESC LIMIT 50");
+        for (Map<String, Object> row : allRows) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("_id", "n_" + row.get("id"));
+            item.put("notification_id", row.get("id"));
+            item.put("title", row.get("title"));
+            item.put("content", row.get("content"));
+            item.put("type", "all");
+            item.put("is_read", 0);
+            item.put("createdAt", Times.iso(toLong(row.get("created_at"))));
+            list.add(item);
+        }
+        list.sort((a, b) -> String.valueOf(((Map) b).get("createdAt")).compareTo(String.valueOf(((Map) a).get("createdAt"))));
         return R.ok(list);
     }
 
@@ -305,8 +319,13 @@ public class ApplicationService {
         StringBuilder where = new StringBuilder(" WHERE 1=1 ");
         List<Object> args = new ArrayList<>();
         if (status != null && !status.isBlank() && !"all".equals(status)) {
-            where.append(" AND status = ? ");
-            args.add(status);
+            if ("interviewed".equals(status)) {
+                // 派生状态：等待一面且一面已完成
+                where.append(" AND status = 'waiting_first' AND JSON_EXTRACT(first_interview, '$.status') = 'completed' ");
+            } else {
+                where.append(" AND status = ? ");
+                args.add(status);
+            }
         }
         if (department != null && !department.isBlank() && !"all".equals(department)) {
             where.append(" AND JSON_CONTAINS(departments, JSON_QUOTE(?)) ");
