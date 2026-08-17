@@ -65,6 +65,8 @@ public class ApplicationService {
                     return updateApplicationInfo(event);
                 case "update_interview_status":
                     return updateInterviewStatus(event);
+                case "my_notifications":
+                    return myNotifications(event);
                 default:
                     return R.fail("未知的操作类型");
             }
@@ -73,6 +75,31 @@ public class ApplicationService {
         } catch (Exception e) {
             return R.fail("服务器内部错误: " + e.getMessage());
         }
+    }
+
+    // ---------------------------------------------------------------- 通知
+
+    /** 当前用户的通知（user_notifications） */
+    private Map<String, Object> myNotifications(Map<String, Object> event) {
+        String userId = resolveUserId(event);
+        if (userId == null) {
+            throw new BizException("请先登录");
+        }
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT * FROM user_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 100", userId);
+        List<Object> list = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            Map<String, Object> item = new LinkedHashMap<>();
+            item.put("_id", row.get("id"));
+            item.put("notification_id", row.get("notification_id"));
+            item.put("title", row.get("title"));
+            item.put("content", row.get("content"));
+            item.put("type", row.get("type"));
+            item.put("is_read", row.get("is_read"));
+            item.put("createdAt", Times.iso(toLong(row.get("created_at"))));
+            list.add(item);
+        }
+        return R.ok(list);
     }
 
     // ---------------------------------------------------------------- 提交

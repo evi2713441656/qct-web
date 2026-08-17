@@ -1,4 +1,4 @@
-name: Deploy H5 to GitHub Pages
+name: Deploy PC Web to GitHub Pages
 
 on:
   push:
@@ -23,18 +23,18 @@ jobs:
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: web/package-lock.json
-      - name: Build H5
-        working-directory: web
+          cache-dependency-path: pc/package-lock.json
+      - name: Build PC web
+        working-directory: pc
         run: |
           npm ci
-          npm run build:h5
+          npm run build
         env:
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
-          path: web/dist/build/h5
+          path: pc/dist
 
   deploy:
     needs: build

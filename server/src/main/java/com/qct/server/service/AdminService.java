@@ -207,7 +207,10 @@ public class AdminService {
         if (data.isEmpty()) {
             data = event;
         }
-        String type = str(data.get("type"));
+        String type = str(data.get("target"));
+        if (type == null) {
+            type = str(data.get("type"));
+        }
         String title = str(data.get("title"));
         String content = str(data.get("content"));
         List<String> targetIds = toStringList(data.get("targetIds"));

@@ -1,0 +1,72 @@
+:root {
+  --primary: #4f6ef7;
+  --primary-light: #eef2ff;
+  --success: #67c23a;
+  --warning: #e6a23c;
+  --danger: #f56c6c;
+  --text-main: #303133;
+  --text-regular: #606266;
+  --text-secondary: #909399;
+  --border: #e4e7ed;
+  --bg: #f5f7fa;
+}
+
+* { box-sizing: border-box; }
+
+html, body, #app {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  font-family: "Helvetica Neue", Helvetica, "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  color: var(--text-main);
+  background: var(--bg);
+}
+
+a { text-decoration: none; color: inherit; }
+
+.page-container {
+  max-width: 1080px;
+  margin: 0 auto;
+  padding: 16px;
+}
+
+.card {
+  background: #fff;
+  border-radius: 10px;
+  padding: 20px;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
+}
+
+.section-title {
+  font-size: 18px;
+  font-weight: 600;
+  margin: 0 0 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.section-title::before {
+  content: "";
+  width: 4px;
+  height: 18px;
+  border-radius: 2px;
+  background: var(--primary);
+}
+
+/* 移动端适配 */
+@media (max-width: 640px) {
+  .page-container { padding: 10px; }
+  .card { padding: 14px; border-radius: 8px; }
+}
+
+/* 状态标签色 */
+.status-waiting_first { color: #409eff; }
+.status-first_passed { color: #e6a23c; }
+.status-first_failed { color: #f56c6c; }
+.status-first_reject { color: #909399; }
+.status-waiting_second { color: #409eff; }
+.status-second_failed { color: #f56c6c; }
+.status-department_selection { color: #67c23a; }
+.status-accepted { color: #67c23a; font-weight: 600; }
+.status-rejected { color: #909399; }
