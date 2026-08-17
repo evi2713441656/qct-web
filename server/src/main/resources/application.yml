@@ -1,0 +1,22 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:mysql://${MYSQL_HOST:localhost}:${MYSQL_PORT:3306}/${MYSQL_DB:qct}?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: ${MYSQL_USER:qct}
+    password: ${MYSQL_PASSWORD:qct123456}
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:db/schema.sql
+      data-locations: classpath:db/data.sql
+
+qct:
+  # JWT 签名密钥（生产环境请通过环境变量 QCT_JWT_SECRET 覆盖）
+  jwt-secret: ${QCT_JWT_SECRET:qct-web-server-jwt-secret-2026}
+  # token 有效期（小时）
+  token-expire-hours: 168
+  # 允许跨域的来源（* 表示全部）
+  cors-allowed-origin: "*"

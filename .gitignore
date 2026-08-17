@@ -1,0 +1,23 @@
+# dependencies
+web/node_modules/
+node_modules/
+
+# build output
+web/dist/
+dist/
+web/unpackage/
+
+# java
+server/target/
+
+# env
+.env
+.env.local
+
+# editor / os
+.hbuilderx/
+.idea/
+*.iml
+.vscode/
+.DS_Store
+Thumbs.db
