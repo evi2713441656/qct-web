@@ -1,7 +1,7 @@
 <template>
   <div>
     <div class="card">
-      <h2 class="section-title">报名管理</h2>
+      <h2 class="section-title">报名管理 · 全部状态</h2>
 
       <div class="toolbar">
         <el-select v-model="filters.status" style="width: 140px;" @change="load(1)">
@@ -16,8 +16,7 @@
         <el-button @click="load()">刷新</el-button>
       </div>
 
-      <el-table :data="list" border stripe size="small" @selection-change="onSelectionChange">
-        <el-table-column type="selection" width="40" />
+      <el-table :data="list" border stripe size="small">
         <el-table-column prop="name" label="姓名" width="90" fixed />
         <el-table-column prop="student_id" label="学号" width="110" />
         <el-table-column label="意向部门" width="140">
@@ -28,15 +27,15 @@
             <span :class="'status-' + deriveStatus(row)">{{ getStatusText(deriveStatus(row)) }}</span>
           </template>
         </el-table-column>
-        <el-table-column label="一面" width="80" align="center">
+        <el-table-column label="一面签到号" width="100" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.firstInterview && row.firstInterview.status === 'completed'" size="small" type="info">已面试</el-tag>
+            <span v-if="row.firstInterview && row.firstInterview.checkInNumber != null">{{ row.firstInterview.checkInNumber }} 号</span>
             <span v-else class="muted">-</span>
           </template>
         </el-table-column>
-        <el-table-column label="二面" width="80" align="center">
+        <el-table-column label="二面签到号" width="100" align="center">
           <template #default="{ row }">
-            <el-tag v-if="row.secondInterview && row.secondInterview.status === 'completed'" size="small" type="info">已完成</el-tag>
+            <span v-if="row.secondInterview && row.secondInterview.checkInNumber != null">{{ row.secondInterview.checkInNumber }} 号</span>
             <span v-else class="muted">-</span>
           </template>
         </el-table-column>
@@ -45,26 +44,14 @@
         <el-table-column label="报名时间" width="130">
           <template #default="{ row }">{{ formatTime(row.applyTime) }}</template>
         </el-table-column>
-        <el-table-column label="操作" width="360" fixed="right">
+        <el-table-column label="操作" width="150" fixed="right">
           <template #default="{ row }">
             <el-button link type="primary" size="small" @click="openDetail(row)">详情</el-button>
-            <template v-if="canFirstPass(row)">
-              <el-button link type="success" size="small" @click="passFirst(row)">一面通过</el-button>
-              <el-button link type="danger" size="small" @click="failFirst(row)">一面不通过</el-button>
-            </template>
-            <template v-if="canUndo(row)">
-              <el-button link type="warning" size="small" @click="undo(row)">撤销</el-button>
-            </template>
             <el-button link type="primary" size="small" @click="openEdit(row)">编辑</el-button>
           </template>
         </el-table-column>
       </el-table>
 
-      <div class="batch-bar" v-if="selected.length">
-        已选 {{ selected.length }} 条：
-        <el-button type="success" size="small" @click="batchPassFirst">批量一面通过</el-button>
-        <el-button type="danger" size="small" @click="batchFailFirst">批量一面不通过</el-button>
-      </div>
 
       <el-pagination
         v-model:current-page="page" :page-size="pageSize" :total="total"
@@ -150,17 +137,6 @@
       </template>
     </el-dialog>
 
-    <!-- 一面通过部门选择 -->
-    <el-dialog v-model="passVisible" :title="passBatch ? '批量一面通过' : '一面通过'" width="440px">
-      <p class="muted" style="margin-top: 0;">请选择通过的部门（最多 2 个）</p>
-      <el-checkbox-group v-model="passDepartments" :max="2">
-        <el-checkbox v-for="d in departmentOptions" :key="d" :value="d">{{ d }}</el-checkbox>
-      </el-checkbox-group>
-      <template #footer>
-        <el-button @click="passVisible = false">取消</el-button>
-        <el-button type="primary" @click="confirmPass">确认</el-button>
-      </template>
-    </el-dialog>
 
     <NotificationDialog v-model="notifyVisible" />
   </div>
@@ -168,8 +144,8 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { ElMessage, ElMessageBox } from 'element-plus'
-import { listApplications, updateStatus, updateApplicationInfo } from '../../api/application.js'
+import { ElMessage } from 'element-plus'
+import { listApplications, updateApplicationInfo } from '../../api/application.js'
 import { getSystemConfigAdmin } from '../../api/admin.js'
 import { STATUS_OPTIONS, getStatusText, deriveStatus } from '../../utils/status.js'
 import { formatTime, listText } from '../../utils/format.js'
@@ -180,7 +156,6 @@ const total = ref(0)
 const page = ref(1)
 const pageSize = ref(50)
 const filters = ref({ status: 'all', department: '', keyword: '' })
-const selected = ref([])
 const departmentOptions = ref(['策划部', '执行部', '宣传部'])
 
 const detailVisible = ref(false)
@@ -188,10 +163,6 @@ const detail = ref(null)
 const editVisible = ref(false)
 const editForm = ref({})
 const editingId = ref('')
-const passVisible = ref(false)
-const passBatch = ref(false)
-const passDepartments = ref([])
-const passTarget = ref(null)
 const notifyVisible = ref(false)
 
 const load = async (p) => {
@@ -221,99 +192,6 @@ const onSearch = () => {
   searchTimer = setTimeout(() => load(1), 300)
 }
 
-const onSelectionChange = (rows) => {
-  selected.value = rows
-}
-
-const canFirstPass = (row) => {
-  const s = deriveStatus(row)
-  return s === 'waiting_first' || s === 'interviewed'
-}
-
-const canUndo = (row) => {
-  return ['first_passed', 'first_failed', 'first_reject', 'waiting_second'].includes(row.status)
-}
-
-const passFirst = (row) => {
-  passBatch.value = false
-  passTarget.value = row
-  passDepartments.value = []
-  passVisible.value = true
-}
-
-const failFirst = async (row) => {
-  try {
-    await ElMessageBox.confirm(`确定将「${row.name}」的一面标记为不通过吗？`, '提示', { type: 'warning' })
-  } catch { return }
-  try {
-    await updateStatus(row._id, 'first_failed')
-    ElMessage.success('已标记一面不通过')
-    load()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-const confirmPass = async () => {
-  if (!passDepartments.value.length) {
-    ElMessage.warning('请至少选择一个通过部门')
-    return
-  }
-  if (passDepartments.value.length > 2) {
-    ElMessage.warning('一面通过最多选择两个部门')
-    return
-  }
-  try {
-    if (passBatch.value) {
-      await Promise.all(selected.value
-        .filter((r) => canFirstPass(r))
-        .map((r) => updateStatus(r._id, 'first_passed', { departments: passDepartments.value })))
-      ElMessage.success(`已通过 ${selected.value.length} 人`)
-    } else {
-      await updateStatus(passTarget.value._id, 'first_passed', { departments: passDepartments.value })
-      ElMessage.success('已标记一面通过')
-    }
-    passVisible.value = false
-    load()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-const batchPassFirst = () => {
-  if (!selected.value.length) return
-  passBatch.value = true
-  passDepartments.value = []
-  passVisible.value = true
-}
-
-const batchFailFirst = async () => {
-  try {
-    await ElMessageBox.confirm(`确定将选中的 ${selected.value.length} 人一面标记为不通过吗？`, '提示', { type: 'warning' })
-  } catch { return }
-  try {
-    await Promise.all(selected.value
-      .filter((r) => canFirstPass(r))
-      .map((r) => updateStatus(r._id, 'first_failed')))
-    ElMessage.success('批量操作完成')
-    load()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
-
-const undo = async (row) => {
-  try {
-    await ElMessageBox.confirm('确定撤销该状态吗？（回到一面待定）', '提示', { type: 'warning' })
-  } catch { return }
-  try {
-    await updateStatus(row._id, 'waiting_first')
-    ElMessage.success('已撤销')
-    load()
-  } catch (e) {
-    ElMessage.error(e.message)
-  }
-}
 
 const openDetail = (row) => {
   detail.value = row

@@ -41,11 +41,11 @@
             <p class="card-kicker">APPLICATION</p>
             <h2>报名进度</h2>
           </div>
-          <span :class="['status-pill', 'status-' + application.status]">{{ getStatusText(application.status) }}</span>
+          <span :class="['status-pill', 'status-' + displayStatus]">{{ getDisplayStatusText(application, config) }}</span>
         </div>
         <el-descriptions class="application-descriptions summary-descriptions" :column="2" border>
           <el-descriptions-item label="当前状态">
-            <span :class="['status-pill', 'status-' + application.status]">{{ getStatusText(application.status) }}</span>
+            <span :class="['status-pill', 'status-' + displayStatus]">{{ getDisplayStatusText(application, config) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="意向部门">{{ listText(application.departments) }}</el-descriptions-item>
           <el-descriptions-item label="报名时间">{{ formatTime(application.applyTime) }}</el-descriptions-item>
@@ -194,7 +194,7 @@ import {
   submitApplication, getApplication, updateApplication, deleteApplication,
   checkIn, selectDepartment, rejectDepartment, updateStatus
 } from '../api/application.js'
-import { getStatusText, deriveStatus } from '../utils/status.js'
+import { getDisplayStatus, getDisplayStatusText, deriveStatus } from '../utils/status.js'
 import { formatTime, listText } from '../utils/format.js'
 
 const user = ref(getUserInfo())
@@ -250,6 +250,7 @@ const applicationOpen = computed(() => {
 })
 
 const config = ref({})
+const displayStatus = computed(() => getDisplayStatus(application.value, config.value))
 const departmentOptions = ref([])
 const selectedDepartment = ref('')
 const checkInEnabled = ref({ first: false, second: false })
@@ -268,7 +269,7 @@ function interviewInfo(type) {
   if (!configured) {
     return { visible: false, canCheckIn: false, time: '-', location: '-', passed: false }
   }
-  const status = application.value.status
+  const status = displayStatus.value
   const waiting = type === 'first' ? status === 'waiting_first' : status === 'waiting_second'
   const done = iv.status === 'completed'
   const passed = iv.result === 'pass'
@@ -288,7 +289,7 @@ const secondInfo = computed(() => interviewInfo('second'))
 const canEdit = computed(() => {
   if (!application.value) return false
   const s = application.value.status
-  if (!['waiting_first', 'first_passed', 'first_failed', 'first_reject', 'waiting_second'].includes(s)) return false
+  if (!['registered', 'waiting_first', 'first_passed', 'first_failed', 'first_reject', 'waiting_second'].includes(s)) return false
   if (checkInEnabled.value.first && firstInterview.value.checkInNumber != null) return true
   const deadline = config.value.editDeadline
   return deadline ? Date.now() <= new Date(deadline).getTime() : true

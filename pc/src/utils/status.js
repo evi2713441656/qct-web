@@ -1,4 +1,5 @@
 export const STATUS_MAP = {
+  registered: { text: '报名成功', color: '#67c23a' },
   waiting_first: { text: '等待一面', color: '#409eff' },
   interviewed: { text: '已面试', color: '#409eff' },
   first_passed: { text: '一面通过', color: '#e6a23c' },
@@ -20,6 +21,24 @@ export function getStatusText(status) {
   return (STATUS_MAP[status] || { text: status || '未知' }).text
 }
 
+export function isInterviewPublished(config, type) {
+  const schedule = config?.interviewConfig?.[type === 'first' ? 'firstInterview' : 'secondInterview']
+  return !!(schedule?.date && schedule?.time)
+}
+
+/** 展示用状态：时间尚未公布时保留“报名成功/一面通过”语义。 */
+export function getDisplayStatus(app, config = {}) {
+  if (!app) return ''
+  if (app.status === 'registered') return 'registered'
+  if (app.status === 'waiting_first' && !isInterviewPublished(config, 'first')) return 'registered'
+  if (app.status === 'first_passed' && !isInterviewPublished(config, 'second')) return 'first_passed'
+  return app.status
+}
+
+export function getDisplayStatusText(app, config = {}) {
+  return getStatusText(getDisplayStatus(app, config))
+}
+
 export function getStatusColor(status) {
   return (STATUS_MAP[status] || { color: '#909399' }).color
 }
@@ -34,6 +53,7 @@ export function deriveStatus(app) {
 
 export const TARGET_OPTIONS = [
   { value: 'all', label: '全部用户' },
+  { value: 'registered', label: '报名成功' },
   { value: 'waiting_first', label: '等待一面' },
   { value: 'interviewed', label: '已面试' },
   { value: 'first_passed', label: '一面通过' },

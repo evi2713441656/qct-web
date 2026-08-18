@@ -15,6 +15,16 @@
           <el-time-picker v-model="config.recruitmentTime.endTime" format="HH:mm" value-format="HH:mm"
             style="width: 200px;" />
         </el-form-item>
+        <el-divider content-position="left">录取确认期限</el-divider>
+        <p class="setting-tip">录取确认截止时间独立于报名截止时间，时间线上的录取节点不展示该时间。</p>
+        <el-form-item label="录取截止日">
+          <el-date-picker v-model="config.recruitmentTime.admissionDate" type="date" value-format="YYYY-MM-DD"
+            placeholder="可不设置" style="width: 200px;" />
+        </el-form-item>
+        <el-form-item label="录取截止时间">
+          <el-time-picker v-model="config.recruitmentTime.admissionTime" format="HH:mm" value-format="HH:mm"
+            placeholder="23:59" style="width: 200px;" />
+        </el-form-item>
       </el-form>
     </div>
 
@@ -110,7 +120,9 @@ import { ElMessage } from 'element-plus'
 import { getSystemConfigAdmin, updateSystemConfig } from '../../api/admin.js'
 
 const config = reactive({
-  recruitmentTime: { startDate: '', endDate: '', endTime: '23:59' },
+  recruitmentTime: {
+    startDate: '', endDate: '', endTime: '23:59', admissionDate: '', admissionTime: '23:59'
+  },
   interviewConfig: { firstInterview: {}, secondInterview: {} },
   departmentDetails: {}
 })
@@ -212,4 +224,5 @@ onMounted(async () => {
   margin-bottom: 12px;
 }
 .interview-config h3 { margin: 0 0 14px; color: #33445f; font-size: 15px; }
+.setting-tip { margin: -4px 0 14px 90px; color: #8491a7; font-size: 12px; line-height: 1.5; }
 </style>

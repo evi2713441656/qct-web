@@ -9,6 +9,11 @@ import com.qct.server.common.Times;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Service;
 
+import java.time.Instant;
+import java.time.LocalDateTime;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -26,8 +31,10 @@ import static com.qct.server.service.AuthService.toStringList;
 public class ApplicationService {
 
     private static final List<String> VALID_STATUSES = List.of(
-            "waiting_first", "first_passed", "first_failed", "first_reject",
+            "registered", "waiting_first", "first_passed", "first_failed", "first_reject",
             "waiting_second", "second_failed", "department_selection", "accepted", "rejected");
+
+    private static final DateTimeFormatter LOCAL_TIME_FORMAT = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm:ss");
 
     private final JdbcTemplate jdbc;
     private final AuthService authService;
@@ -67,6 +74,10 @@ public class ApplicationService {
                     return updateInterviewStatus(event);
                 case "my_notifications":
                     return myNotifications(event);
+                case "public_notifications":
+                    return publicNotifications();
+                case "mark_notifications_read":
+                    return markNotificationsRead(event);
                 default:
                     return R.fail("未知的操作类型");
             }
@@ -79,50 +90,103 @@ public class ApplicationService {
 
     // ---------------------------------------------------------------- 通知
 
-    /** 当前用户的通知（user_notifications + 全站通知 type=all） */
+    /** 当前用户的通知（个人通知 + 全站通知，并保留已读状态） */
     private Map<String, Object> myNotifications(Map<String, Object> event) {
         String userId = resolveUserId(event);
         if (userId == null) {
             throw new BizException("请先登录");
         }
-        List<Map<String, Object>> rows = jdbc.queryForList(
-                "SELECT * FROM user_notifications WHERE user_id = ? ORDER BY created_at DESC LIMIT 100", userId);
         List<Object> list = new ArrayList<>();
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT * FROM user_notifications WHERE user_id = ? AND (type IS NULL OR type <> 'all') ORDER BY created_at DESC LIMIT 100", userId);
         for (Map<String, Object> row : rows) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("_id", row.get("id"));
-            item.put("notification_id", row.get("notification_id"));
-            item.put("title", row.get("title"));
-            item.put("content", row.get("content"));
-            item.put("type", row.get("type"));
-            item.put("is_read", row.get("is_read"));
-            item.put("createdAt", Times.iso(toLong(row.get("created_at"))));
-            list.add(item);
+            list.add(toNotificationClient(row.get("id"), row.get("notification_id"), row.get("title"),
+                    row.get("content"), row.get("type"), row.get("is_read"), row.get("created_at")));
         }
         List<Map<String, Object>> allRows = jdbc.queryForList(
-                "SELECT * FROM notifications WHERE type = 'all' ORDER BY created_at DESC LIMIT 50");
+                "SELECT n.*, COALESCE(un.is_read, 0) AS user_is_read "
+                        + "FROM notifications n LEFT JOIN user_notifications un "
+                        + "ON un.notification_id = n.id AND un.user_id = ? "
+                        + "WHERE n.type = 'all' ORDER BY n.created_at DESC LIMIT 50", userId);
         for (Map<String, Object> row : allRows) {
-            Map<String, Object> item = new LinkedHashMap<>();
-            item.put("_id", "n_" + row.get("id"));
-            item.put("notification_id", row.get("id"));
-            item.put("title", row.get("title"));
-            item.put("content", row.get("content"));
-            item.put("type", "all");
-            item.put("is_read", 0);
-            item.put("createdAt", Times.iso(toLong(row.get("created_at"))));
-            list.add(item);
+            list.add(toNotificationClient("n_" + row.get("id"), row.get("id"), row.get("title"),
+                    row.get("content"), "all", row.get("user_is_read"), row.get("created_at")));
         }
         list.sort((a, b) -> String.valueOf(((Map) b).get("createdAt")).compareTo(String.valueOf(((Map) a).get("createdAt"))));
         return R.ok(list);
     }
 
-    // ---------------------------------------------------------------- 提交
+    /** 未登录用户可查看的全站信息提示。 */
+    private Map<String, Object> publicNotifications() {
+        List<Map<String, Object>> rows = jdbc.queryForList(
+                "SELECT * FROM notifications WHERE type = 'all' ORDER BY created_at DESC LIMIT 50");
+        List<Object> list = new ArrayList<>();
+        for (Map<String, Object> row : rows) {
+            list.add(toNotificationClient("n_" + row.get("id"), row.get("id"), row.get("title"),
+                    row.get("content"), "all", 0, row.get("created_at")));
+        }
+        return R.ok(list);
+    }
 
-    private Map<String, Object> submitApplication(Object dataObj, Map<String, Object> event) {
-        AuthContext.Context ctx = AuthContext.get();
+    /** 将个人通知或全站通知标记为已读。 */
+    private Map<String, Object> markNotificationsRead(Map<String, Object> event) {
         String userId = resolveUserId(event);
         if (userId == null) {
             throw new BizException("请先登录");
+        }
+        List<String> notificationIds = toStringList(event.get("notificationIds"));
+        if (notificationIds.isEmpty()) {
+            jdbc.update("UPDATE user_notifications SET is_read = 1 WHERE user_id = ?", userId);
+            return R.okMsg("通知已读");
+        }
+        for (String notificationId : notificationIds) {
+            if (notificationId == null || notificationId.isBlank()) continue;
+            String id = notificationId.startsWith("n_") ? notificationId.substring(2) : notificationId;
+            List<Map<String, Object>> rows = jdbc.queryForList("SELECT * FROM notifications WHERE id = ?", id);
+            if (!rows.isEmpty() && "all".equals(str(rows.get(0).get("type")))) {
+                Map<String, Object> notification = rows.get(0);
+                Integer count = jdbc.queryForObject(
+                        "SELECT COUNT(*) FROM user_notifications WHERE user_id = ? AND notification_id = ?",
+                        Integer.class, userId, id);
+                if (count != null && count > 0) {
+                    jdbc.update("UPDATE user_notifications SET is_read = 1 WHERE user_id = ? AND notification_id = ?",
+                            userId, id);
+                } else {
+                    jdbc.update("INSERT INTO user_notifications (id, user_id, notification_id, title, content, type, is_read, created_at) VALUES (?,?,?,?,?,?,?,?)",
+                            Ids.newId(), userId, id, notification.get("title"), notification.get("content"),
+                            "all", 1, notification.get("created_at"));
+                }
+            } else {
+                jdbc.update("UPDATE user_notifications SET is_read = 1 WHERE user_id = ? AND notification_id = ?",
+                        userId, id);
+            }
+        }
+        return R.okMsg("通知已读");
+    }
+
+    private Map<String, Object> toNotificationClient(Object id, Object notificationId, Object title,
+                                                       Object content, Object type, Object isRead, Object createdAt) {
+        Map<String, Object> item = new LinkedHashMap<>();
+        item.put("_id", id);
+        item.put("notification_id", notificationId);
+        item.put("title", title);
+        item.put("content", content);
+        item.put("type", type);
+        item.put("is_read", isRead);
+        item.put("createdAt", Times.iso(toLong(createdAt)));
+        return item;
+    }
+
+    // ---------------------------------------------------------------- 提交
+
+    private Map<String, Object> submitApplication(Object dataObj, Map<String, Object> event) {
+        String userId = resolveUserId(event);
+        if (userId == null) {
+            throw new BizException("请先登录");
+        }
+
+        if (!isApplicationOpen()) {
+            throw new BizException("当前不在报名时间内");
         }
 
         Map<String, Object> data = asMap(dataObj);
@@ -157,6 +221,7 @@ public class ApplicationService {
         }
 
         long now = Times.now();
+        String initialStatus = isInterviewPublished("firstInterview") ? "waiting_first" : "registered";
         Map<String, Object> application = new LinkedHashMap<>();
         application.put("user_id", userId);
         application.put("name", name);
@@ -172,7 +237,7 @@ public class ApplicationService {
         application.put("introduction", introduction);
         application.put("experience", str(data.get("experience")) == null ? "" : str(data.get("experience")));
         application.put("motivation", str(data.get("motivation")) == null ? "" : str(data.get("motivation")));
-        application.put("status", "waiting_first");
+        application.put("status", initialStatus);
 
         String id = Ids.newId();
         jdbc.update("INSERT INTO applications (id, user_id, name, student_id, phone, email, college, major, grade, gender, dormitory, departments, introduction, experience, motivation, status, apply_time, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
@@ -186,7 +251,7 @@ public class ApplicationService {
                 Json.write(departments), introduction,
                 str(data.get("experience")) == null ? "" : str(data.get("experience")),
                 str(data.get("motivation")) == null ? "" : str(data.get("motivation")),
-                "waiting_first", now, now, now);
+                initialStatus, now, now, now);
 
         Map<String, Object> result = new LinkedHashMap<>();
         result.put("id", id);
@@ -213,6 +278,13 @@ public class ApplicationService {
         if (!userId.equals(str(app.get("user_id")))) {
             throw new BizException("无权修改此申请");
         }
+        if (!List.of("registered", "waiting_first", "first_passed", "first_failed", "first_reject", "waiting_second")
+                .contains(str(app.get("status")))) {
+            throw new BizException("当前状态不允许修改报名信息");
+        }
+        if (!isBeforeEditDeadline()) {
+            throw new BizException("报名修改时间已截止");
+        }
 
         Map<String, Object> data = asMap(dataObj);
         String studentId = str(data.get("studentId"));
@@ -226,6 +298,13 @@ public class ApplicationService {
         }
 
         List<String> departments = toStringList(data.get("departments"));
+        if (departments.isEmpty() || departments.size() > 2) {
+            throw new BizException("请选择 1-2 个意向部门");
+        }
+        String introduction = str(data.get("introduction"));
+        if (introduction == null || introduction.isBlank()) {
+            throw new BizException("请填写自我介绍");
+        }
         long now = Times.now();
         jdbc.update("UPDATE applications SET name = ?, student_id = ?, phone = ?, email = ?, college = ?, major = ?, grade = ?, gender = ?, dormitory = ?, departments = ?, introduction = ?, experience = ?, motivation = ?, updated_at = ? WHERE id = ?",
                 str(data.get("name")), studentId, str(data.get("phone")),
@@ -286,7 +365,7 @@ public class ApplicationService {
         if (!userId.equals(str(app.get("user_id")))) {
             throw new BizException("无权删除此申请");
         }
-        if (!"waiting_first".equals(str(app.get("status")))) {
+        if (!List.of("registered", "waiting_first").contains(str(app.get("status")))) {
             throw new BizException("当前状态不允许撤销申请");
         }
 
@@ -375,7 +454,8 @@ public class ApplicationService {
         // 管理员可处理全部状态流转；学生仅能确认或拒绝本人已通过的一面邀请。
         if (!ctx.hasAdmin()) {
             boolean isOwner = ctx.hasUser() && ctx.userId.equals(str(app.get("user_id")));
-            boolean canConfirmSecond = "first_passed".equals(currentStatus) && "waiting_second".equals(status);
+            boolean canConfirmSecond = "first_passed".equals(currentStatus) && "waiting_second".equals(status)
+                    && isInterviewPublished("secondInterview");
             boolean canRejectSecond = "first_passed".equals(currentStatus) && "first_reject".equals(status);
             if (!isOwner || (!canConfirmSecond && !canRejectSecond)) {
                 throw new BizException("无权操作");
@@ -460,6 +540,9 @@ public class ApplicationService {
                     update.put("firstInterview", first);
                     update.put("secondInterview", newInterview());
                     update.put("finalDepartment", null);
+                }
+                if (isInterviewPublished("secondInterview")) {
+                    update.put("status", "waiting_second");
                 }
                 break;
             }
@@ -624,6 +707,9 @@ public class ApplicationService {
         if (applicationId == null || applicationId.isBlank() || department == null || department.isBlank()) {
             throw new BizException("缺少必要参数");
         }
+        if (userId == null) {
+            throw new BizException("请先登录");
+        }
         Map<String, Object> app = findById(applicationId);
         if (app == null) {
             throw new BizException("申请不存在");
@@ -633,6 +719,9 @@ public class ApplicationService {
         }
         if (!"department_selection".equals(str(app.get("status")))) {
             throw new BizException("当前状态不允许选择部门");
+        }
+        if (!isBeforeAdmissionDeadline()) {
+            throw new BizException("录取确认时间已截止");
         }
         Map<String, Object> second = interview(app, "second");
         List<Object> passed = (List<Object>) second.get("passedDepartments");
@@ -654,15 +743,21 @@ public class ApplicationService {
         if (applicationId == null || applicationId.isBlank()) {
             throw new BizException("缺少必要参数");
         }
+        if (userId == null) {
+            throw new BizException("请先登录");
+        }
         Map<String, Object> app = findById(applicationId);
         if (app == null) {
             throw new BizException("申请不存在");
         }
-        if (userId != null && !userId.equals(str(app.get("user_id")))) {
+        if (!userId.equals(str(app.get("user_id")))) {
             throw new BizException("无权操作此申请");
         }
         if (!"department_selection".equals(str(app.get("status")))) {
             throw new BizException("当前状态不允许拒绝录取");
+        }
+        if (!isBeforeAdmissionDeadline()) {
+            throw new BizException("录取确认时间已截止");
         }
 
         Map<String, Object> update = new LinkedHashMap<>();
@@ -695,7 +790,7 @@ public class ApplicationService {
             throw new BizException("当前状态不允许签到");
         }
 
-        Map<String, Object> interview = asMap(app.get(interviewType + "Interview"));
+        Map<String, Object> interview = interview(app, interviewType);
         if (interview.get("checkInNumber") != null) {
             throw new BizException("您已经签到过了");
         }
@@ -833,7 +928,7 @@ public class ApplicationService {
             throw new BizException("当前申请状态不允许更新面试状态");
         }
 
-        Map<String, Object> interview = asMap(app.get(interviewType + "Interview"));
+        Map<String, Object> interview = interview(app, interviewType);
         if (status == null) {
             interview.put("status", null);
             interview.put("completedAt", null);
@@ -1010,9 +1105,88 @@ public class ApplicationService {
         }
     }
 
+    /**
+     * 系统配置发布后，同步报名阶段状态：
+     * 报名成功在一面时间公布后进入等待一面；一面通过在二面时间公布后进入等待二面。
+     */
+    public void syncStatusesForPublishedInterviews(Object interviewConfigObj) {
+        Map<String, Object> interviewConfig = asMap(interviewConfigObj);
+        long now = Times.now();
+        if (isPublished(asMap(interviewConfig.get("firstInterview")))) {
+            jdbc.update("UPDATE applications SET status = 'waiting_first', updated_at = ? WHERE status = 'registered'", now);
+        }
+        if (isPublished(asMap(interviewConfig.get("secondInterview")))) {
+            jdbc.update("UPDATE applications SET status = 'waiting_second', second_interview = ?, updated_at = ? WHERE status = 'first_passed'",
+                    Json.write(newInterview()), now);
+        }
+    }
+
     public Map<String, Object> getConfigFirst() {
         List<Map<String, Object>> rows = jdbc.queryForList("SELECT * FROM system_config ORDER BY created_at ASC LIMIT 1");
         return rows.isEmpty() ? null : rows.get(0);
+    }
+
+    private boolean isApplicationOpen() {
+        Map<String, Object> config = getConfigFirst();
+        if (config == null) return true;
+        Long start = parseConfiguredTime(str(config.get("application_start_time")));
+        Long end = parseConfiguredTime(str(config.get("application_end_time")));
+        long now = Times.now();
+        return (start == null || now >= start) && (end == null || now <= end);
+    }
+
+    private boolean isBeforeEditDeadline() {
+        Map<String, Object> config = getConfigFirst();
+        if (config == null) return true;
+        Long deadline = parseConfiguredTime(str(config.get("edit_deadline")));
+        if (deadline == null) deadline = parseConfiguredTime(str(config.get("application_end_time")));
+        return deadline == null || Times.now() <= deadline;
+    }
+
+    private boolean isBeforeAdmissionDeadline() {
+        Map<String, Object> config = getConfigFirst();
+        if (config == null) return true;
+        Map<String, Object> recruitment = asMap(config.get("recruitment_time"));
+        String date = str(recruitment.get("admissionDate"));
+        if (date == null || date.isBlank()) return true;
+        String time = str(recruitment.get("admissionTime"));
+        String value = date.trim();
+        if (!value.contains("T") && !value.contains(" ")) {
+            value += "T" + (time == null || time.isBlank() ? "23:59:59" : (time.length() == 5 ? time + ":59" : time));
+        }
+        Long deadline = parseConfiguredTime(value);
+        return deadline == null || Times.now() <= deadline;
+    }
+
+    private boolean isInterviewPublished(String key) {
+        Map<String, Object> config = getConfigFirst();
+        if (config == null) return false;
+        Map<String, Object> interviewConfig = asMap(config.get("interview_config"));
+        return isPublished(asMap(interviewConfig.get(key)));
+    }
+
+    private static boolean isPublished(Map<String, Object> schedule) {
+        String date = str(schedule.get("date"));
+        String time = str(schedule.get("time"));
+        return date != null && !date.isBlank() && time != null && !time.isBlank();
+    }
+
+    private static Long parseConfiguredTime(String value) {
+        if (value == null || value.isBlank()) return null;
+        String text = value.trim();
+        try {
+            return Instant.parse(text).toEpochMilli();
+        } catch (DateTimeParseException ignored) {
+            // 兼容配置表中未带时区的本地 ISO 时间。
+        }
+        try {
+            String normalized = text.replace(' ', 'T');
+            if (normalized.length() == 16) normalized += ":00";
+            return LocalDateTime.parse(normalized, LOCAL_TIME_FORMAT)
+                    .atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
+        } catch (DateTimeParseException ignored) {
+            return null;
+        }
     }
 
     public static Map<String, Object> asMap(Object value) {

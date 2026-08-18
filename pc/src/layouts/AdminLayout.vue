@@ -11,6 +11,10 @@
           <el-icon><Document /></el-icon>
           <span>报名管理</span>
         </el-menu-item>
+        <el-menu-item index="/admin/first-interview">
+          <el-icon><ChatDotSquare /></el-icon>
+          <span>一面管理</span>
+        </el-menu-item>
         <el-menu-item index="/admin/second-interview">
           <el-icon><ChatDotSquare /></el-icon>
           <span>二面管理</span>

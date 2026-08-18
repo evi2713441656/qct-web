@@ -12,6 +12,7 @@ const routes = [
     children: [
       { path: 'dashboard', component: () => import('../views/admin/Dashboard.vue') },
       { path: 'applications', component: () => import('../views/admin/Applications.vue') },
+      { path: 'first-interview', component: () => import('../views/admin/FirstInterview.vue') },
       { path: 'second-interview', component: () => import('../views/admin/SecondInterview.vue') },
       { path: 'admissions', component: () => import('../views/admin/Admissions.vue') },
       { path: 'notifications', component: () => import('../views/admin/Notifications.vue') },

@@ -323,6 +323,7 @@ public class AdminService {
             data.put("applicationStartTime", "2025-08-01T00:00:00");
             data.put("applicationEndTime", "2025-10-15T23:59:59");
             data.put("editDeadline", "2025-10-15T23:59:59");
+            data.put("admissionDeadline", null);
             return R.ok(data);
         }
 
@@ -336,10 +337,14 @@ public class AdminService {
 
         String startDate = str(recruitmentTime.get("startDate"));
         String endDate = str(recruitmentTime.get("endDate"));
+        String endTime = str(recruitmentTime.get("endTime"));
+        String admissionDate = str(recruitmentTime.get("admissionDate"));
+        String admissionTime = str(recruitmentTime.get("admissionTime"));
 
         result.put("applicationStartTime", normalizeStart(startDate));
-        result.put("applicationEndTime", normalizeEnd(endDate));
-        result.put("editDeadline", normalizeEnd(endDate));
+        result.put("applicationEndTime", normalizeEnd(endDate, endTime));
+        result.put("editDeadline", normalizeEnd(endDate, endTime));
+        result.put("admissionDeadline", normalizeEnd(admissionDate, admissionTime));
 
         result.put("recruitmentTime", recruitmentTime);
         result.put("departmentDetails", config.get("department_details") == null
@@ -366,8 +371,11 @@ public class AdminService {
         if (endDate == null || endDate.isBlank()) {
             throw new BizException("缺少结束时间");
         }
+        String endTime = str(recruitmentTime.get("endTime"));
+        String admissionDate = str(recruitmentTime.get("admissionDate"));
+        String admissionTime = str(recruitmentTime.get("admissionTime"));
         String start = normalizeStart(startDate);
-        String end = normalizeEnd(endDate);
+        String end = normalizeEnd(endDate, endTime);
         if (start == null || end == null) {
             throw new BizException("时间格式验证失败");
         }
@@ -384,7 +392,9 @@ public class AdminService {
         Map<String, Object> newRecruitment = new LinkedHashMap<>();
         newRecruitment.put("startDate", startDate);
         newRecruitment.put("endDate", endDate);
-        newRecruitment.put("endTime", recruitmentTime.get("endTime") == null ? "23:59" : str(recruitmentTime.get("endTime")));
+        newRecruitment.put("endTime", endTime == null || endTime.isBlank() ? "23:59" : endTime);
+        newRecruitment.put("admissionDate", admissionDate == null ? "" : admissionDate);
+        newRecruitment.put("admissionTime", admissionTime == null ? "23:59" : admissionTime);
 
         StringBuilder sql = new StringBuilder("UPDATE system_config SET recruitment_time = ?, application_start_time = ?, application_end_time = ?, edit_deadline = ?, updated_at = ? ");
         List<Object> args = new ArrayList<>();
@@ -405,6 +415,9 @@ public class AdminService {
         sql.append(" WHERE id = ? ");
         args.add(id);
         jdbc.update(sql.toString(), args.toArray());
+        if (configData.get("interviewConfig") != null) {
+            applicationService.syncStatusesForPublishedInterviews(configData.get("interviewConfig"));
+        }
 
         return R.okMsg("配置更新成功");
     }
@@ -596,11 +609,14 @@ public class AdminService {
         return s;
     }
 
-    private static String normalizeEnd(String date) {
+    private static String normalizeEnd(String date, String time) {
         if (date == null || date.isBlank()) {
             return null;
         }
         String s = date.trim();
+        if (time != null && !time.isBlank() && !s.contains("T") && !s.contains(" ")) {
+            return s + "T" + (time.length() == 5 ? time + ":59" : time);
+        }
         if (!s.contains("T") && !s.contains(" ")) {
             return s + "T23:59:59";
         }

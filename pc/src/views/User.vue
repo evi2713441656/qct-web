@@ -47,14 +47,14 @@
                 </span>
               </template>
               <template #description>
-                <div class="timeline-date">{{ stage.date }}</div>
+                <div v-if="stage.date" class="timeline-date">{{ stage.date }}</div>
                 <div v-if="stage.detail" class="timeline-result">{{ stage.detail }}</div>
               </template>
             </el-step>
           </el-steps>
           <el-descriptions class="application-descriptions" :column="2" border>
             <el-descriptions-item label="当前状态">
-              <span :class="['status-pill', 'status-' + application.status]">{{ getStatusText(application.status) }}</span>
+              <span :class="['status-pill', 'status-' + displayStatus]">{{ getDisplayStatusText(application, systemConfig) }}</span>
             </el-descriptions-item>
             <el-descriptions-item label="意向部门">{{ listText(application.departments) }}</el-descriptions-item>
             <el-descriptions-item v-if="application.finalDepartment" label="录取部门">
@@ -126,7 +126,7 @@ import { Check } from '@element-plus/icons-vue'
 import { getSystemConfig, getUserInfo, isLoggedIn, logout } from '../api/auth.js'
 import { getApplication } from '../api/application.js'
 import { callCloudOrThrow } from '../api/http.js'
-import { getStatusText } from '../utils/status.js'
+import { getDisplayStatus, getDisplayStatusText } from '../utils/status.js'
 import { formatTime, formatSmartTime, listText } from '../utils/format.js'
 import { getTimelineStages } from '../utils/timeline.js'
 
@@ -137,6 +137,7 @@ const notifications = ref([])
 const systemConfig = ref({})
 
 const timelineStages = computed(() => getTimelineStages(application.value, systemConfig.value))
+const displayStatus = computed(() => getDisplayStatus(application.value, systemConfig.value))
 
 function schedule(key) {
   const value = systemConfig.value.interviewConfig?.[key] || {}
@@ -338,6 +339,7 @@ onMounted(() => {
   font-size: 12px;
   font-weight: 700;
 }
+.status-registered,
 .status-accepted,
 .status-department_selection { color: #269b72; }
 .status-first_failed,

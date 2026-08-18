@@ -9,7 +9,7 @@ VALUES ('admin_001', 'admin', '240be518fabd2724ddb6f04eeb1da5967448d7e831c08c8fa
 
 INSERT INTO system_config (id, recruitment_time, department_details, interview_config, system_settings, application_start_time, application_end_time, edit_deadline, created_at, updated_at)
 SELECT 'sysconfig_default',
-       JSON_OBJECT('startDate', '2025-08-01', 'endDate', '2025-10-15 23:59'),
+       JSON_OBJECT('startDate', '2025-08-01', 'endDate', '2025-10-15', 'endTime', '23:59', 'admissionDate', '', 'admissionTime', '23:59'),
        JSON_OBJECT(
            '策划部', JSON_OBJECT('name', '策划部', 'shortName', '策划', 'color', '#FF6B6B', 'description', '协会的"大脑"',
                'introduction', '作为协会的核心部门，策划部肩负着活动从构思到落地的全流程工作。在这里，你将主导活动方案设计，协调各部门分工，把控每个执行细节，用专业与创意打造精彩活动。加入策划组，你不仅能系统学习活动策划、应急处理等实用技能，更能收获将创意变为现实的成就感。我们寻找思维缜密、责任心强的小伙伴，也欢迎零基础但充满热情的你！别担心经验不足，我们将提供专业培训，只要你态度认真，这里就是展现才华的完美舞台。期待与你一起，用智慧点燃每一个创新火花！',

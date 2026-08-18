@@ -17,6 +17,39 @@
           <div class="countdown-time">{{ countdownText }}</div>
         </div>
         <div class="auth-actions">
+          <el-popover
+            v-model:visible="notificationVisible"
+            placement="bottom-end"
+            trigger="hover"
+            :width="360"
+            @show="markNotificationsAsRead"
+          >
+            <template #reference>
+              <el-badge class="notification-badge" :is-dot="unreadNotifications > 0">
+                <el-button class="notification-trigger" circle text aria-label="信息提示">
+                  <el-icon><Bell /></el-icon>
+                </el-button>
+              </el-badge>
+            </template>
+            <div class="notification-popover">
+              <div class="notification-popover-head">
+                <strong>信息提示</strong>
+                <span v-if="notifications.length" class="notification-total">{{ notifications.length }} 条</span>
+              </div>
+              <el-empty v-if="!notifications.length" description="暂无信息" :image-size="58" />
+              <div v-else class="notification-list">
+                <article v-for="item in notifications" :key="item._id" class="notification-item">
+                  <div class="notification-item-head">
+                    <span class="notification-item-title">{{ item.title }}</span>
+                    <span v-if="!Number(item.is_read)" class="notification-new">未读</span>
+                  </div>
+                  <div class="notification-item-content">{{ item.content }}</div>
+                  <div class="notification-item-time">{{ formatSmartTime(item.createdAt) }}</div>
+                </article>
+              </div>
+              <el-button v-if="user" link type="primary" class="notification-more" @click="$router.push('/user')">查看全部通知 →</el-button>
+            </div>
+          </el-popover>
           <template v-if="user">
             <span class="welcome-text">你好！{{ user.name }}同学</span>
             <el-button size="small" plain @click="$router.push('/user')">个人中心</el-button>
@@ -76,7 +109,7 @@
               </span>
             </template>
             <template #description>
-              <div class="timeline-date">{{ stage.date }}</div>
+              <div v-if="stage.date" class="timeline-date">{{ stage.date }}</div>
               <div v-if="stage.detail" class="timeline-result">{{ stage.detail }}</div>
             </template>
           </el-step>
@@ -119,9 +152,11 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage } from 'element-plus'
-import { Check } from '@element-plus/icons-vue'
+import { Bell, Check } from '@element-plus/icons-vue'
 import { getSystemConfig, getUserInfo, isLoggedIn, login, logout, register } from '../api/auth.js'
 import { getApplication } from '../api/application.js'
+import { getMyNotifications, getPublicNotifications, markNotificationsRead } from '../api/notification.js'
+import { formatSmartTime } from '../utils/format.js'
 import { getTimelineStages } from '../utils/timeline.js'
 
 const config = ref({})
@@ -135,6 +170,11 @@ const loggingIn = ref(false)
 const registering = ref(false)
 const loginForm = ref({ phone: '', password: '' })
 const registerForm = ref({ name: '', phone: '', password: '' })
+const notifications = ref([])
+const notificationVisible = ref(false)
+const publicReadIds = ref(readPublicNotificationIds())
+
+const unreadNotifications = computed(() => notifications.value.filter((item) => !Number(item.is_read)).length)
 
 const defaultDepartments = [
   {
@@ -200,6 +240,43 @@ function diffText(ms) {
   return `${minute}分钟`
 }
 
+function readPublicNotificationIds() {
+  try {
+    return JSON.parse(localStorage.getItem('qctPublicReadNotifications') || '[]')
+  } catch {
+    return []
+  }
+}
+
+async function loadNotifications() {
+  try {
+    const result = isLoggedIn() ? await getMyNotifications() : await getPublicNotifications()
+    const readIds = new Set(publicReadIds.value)
+    notifications.value = (result.data || []).map((item) => ({
+      ...item,
+      is_read: isLoggedIn() ? item.is_read : (readIds.has(String(item.notification_id)) ? 1 : 0)
+    }))
+  } catch {
+    notifications.value = []
+  }
+}
+
+async function markNotificationsAsRead() {
+  const unread = notifications.value.filter((item) => !Number(item.is_read))
+  if (!unread.length) return
+  if (isLoggedIn()) {
+    try {
+      await markNotificationsRead(unread.map((item) => item.notification_id))
+    } catch { /* 不阻塞信息提示 */ }
+  } else {
+    const ids = new Set(publicReadIds.value)
+    unread.forEach((item) => ids.add(String(item.notification_id)))
+    publicReadIds.value = Array.from(ids).slice(-200)
+    localStorage.setItem('qctPublicReadNotifications', JSON.stringify(publicReadIds.value))
+  }
+  notifications.value = notifications.value.map((item) => ({ ...item, is_read: 1 }))
+}
+
 async function loadApplication() {
   if (!isLoggedIn()) {
     application.value = null
@@ -231,6 +308,7 @@ async function doLogin() {
     const data = await login(loginForm.value.phone.trim(), loginForm.value.password)
     user.value = data.userInfo
     await loadApplication()
+    await loadNotifications()
     loginForm.value = { phone: '', password: '' }
     loginVisible.value = false
     ElMessage.success('登录成功')
@@ -256,6 +334,7 @@ async function doRegister() {
     const data = await register(name.trim(), phone.trim(), password)
     user.value = data.userInfo
     await loadApplication()
+    await loadNotifications()
     registerForm.value = { name: '', phone: '', password: '' }
     registerVisible.value = false
     ElMessage.success('注册成功，已自动登录')
@@ -270,6 +349,7 @@ function handleLogout() {
   logout()
   user.value = null
   application.value = null
+  loadNotifications()
   ElMessage.success('已退出登录')
 }
 
@@ -285,9 +365,11 @@ onMounted(async () => {
   }
   calcCountdown()
   await loadApplication()
+  await loadNotifications()
   setInterval(() => {
     calcCountdown()
     loadApplication()
+    loadNotifications()
   }, 60000)
 })
 </script>
@@ -352,6 +434,19 @@ onMounted(async () => {
   gap: 8px;
 }
 .welcome-text { font-size: 14px; font-weight: 600; }
+.notification-badge { display: inline-flex; }
+.notification-trigger { color: #fff !important; font-size: 18px; }
+.notification-badge :deep(.el-badge__content.is-dot) { top: 3px; right: 3px; border: 2px solid #6a8dff; }
+.notification-popover { max-height: 390px; overflow: auto; }
+.notification-popover-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; color: #33415c; }
+.notification-total, .notification-item-time { color: #8a9ab4; font-size: 12px; }
+.notification-list { display: grid; gap: 8px; }
+.notification-item { padding: 10px; border-radius: 8px; background: #f7f9fd; }
+.notification-item-head { display: flex; align-items: center; gap: 6px; }
+.notification-item-title { flex: 1; font-size: 13px; font-weight: 700; color: #33415c; }
+.notification-new { color: #fff; background: #f56c6c; border-radius: 8px; padding: 1px 5px; font-size: 10px; }
+.notification-item-content { margin: 5px 0; color: #5c6b82; font-size: 12px; line-height: 1.55; white-space: pre-wrap; }
+.notification-more { display: block; margin: 8px auto 0; }
 .logout-button { color: #fff !important; }
 .password-tip { width: 100%; margin-top: 4px; font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
 .hero h1 { font-size: 32px; margin: 0 0 8px; }

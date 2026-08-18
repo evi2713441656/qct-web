@@ -72,8 +72,9 @@ public class NotificationService {
             case "selected":
                 return selectedUsers == null ? List.of() : selectedUsers;
             case "applicants":
-            case "registered":
                 return queryUserIds("1=1");
+            case "registered":
+                return queryUserIds("status = 'registered'");
             case "waiting_first":
                 return queryUserIds("status = 'waiting_first'");
             case "first_passed":

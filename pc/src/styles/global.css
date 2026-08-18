@@ -61,6 +61,7 @@ a { text-decoration: none; color: inherit; }
 }
 
 /* 状态标签色 */
+.status-registered { color: #67c23a; }
 .status-waiting_first { color: #409eff; }
 .status-first_passed { color: #e6a23c; }
 .status-first_failed { color: #f56c6c; }
