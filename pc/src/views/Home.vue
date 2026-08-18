@@ -80,13 +80,20 @@
       </template>
     </el-dialog>
 
-    <el-dialog v-model="registerVisible" title="用户注册" width="380px" :close-on-click-modal="false">
+    <el-dialog v-model="registerVisible" title="用户注册" width="min(460px, calc(100vw - 32px))" :close-on-click-modal="false">
       <el-form label-width="72px" @submit.prevent="doRegister">
         <el-form-item label="姓名" required>
           <el-input v-model="registerForm.name" maxlength="64" placeholder="请输入真实姓名" autocomplete="name" />
         </el-form-item>
         <el-form-item label="手机号" required>
           <el-input v-model="registerForm.phone" inputmode="numeric" maxlength="11" placeholder="请输入手机号" autocomplete="tel" />
+        </el-form-item>
+        <el-form-item label="密码" required>
+          <el-input v-model="registerForm.password" type="password" show-password placeholder="字母和数字组合" autocomplete="new-password" />
+          <div class="password-tip">密码必须同时包含字母和数字</div>
+        </el-form-item>
+        <el-form-item label="确认密码" required>
+          <el-input v-model="registerForm.confirmPassword" type="password" show-password placeholder="请再次输入密码" autocomplete="new-password" @keyup.enter="doRegister" />
         </el-form-item>
         <el-form-item label="安全验证" required>
           <SliderCaptcha
@@ -95,10 +102,6 @@
             @verified="sliderPosition = $event"
             @refresh="loadSliderChallenge"
           />
-        </el-form-item>
-        <el-form-item label="密码" required>
-          <el-input v-model="registerForm.password" type="password" show-password placeholder="字母和数字组合" autocomplete="new-password" @keyup.enter="doRegister" />
-          <div class="password-tip">密码必须同时包含字母和数字</div>
         </el-form-item>
       </el-form>
       <template #footer>
@@ -185,7 +188,7 @@ const sliderChallenge = ref(null)
 const sliderVerified = ref(false)
 const sliderPosition = ref(null)
 const loginForm = ref({ phone: '', password: '' })
-const registerForm = ref({ name: '', phone: '', password: '' })
+const registerForm = ref({ name: '', phone: '', password: '', confirmPassword: '' })
 const notifications = ref([])
 const notificationVisible = ref(false)
 const publicReadIds = ref(readPublicNotificationIds())
@@ -370,17 +373,21 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  const { name, phone, password } = registerForm.value
+  const { name, phone, password, confirmPassword } = registerForm.value
   if (!name.trim() || !isValidPhone(phone)) {
     ElMessage.warning('请输入姓名和正确的手机号')
     return
   }
-  if (!sliderVerified.value || !sliderChallenge.value || sliderPosition.value == null) {
-    ElMessage.warning('请先完成图块滑动验证')
-    return
-  }
   if (!isValidPassword(password)) {
     ElMessage.warning('密码必须同时包含字母和数字')
+    return
+  }
+  if (password !== confirmPassword) {
+    ElMessage.warning('两次输入的密码不一致')
+    return
+  }
+  if (!sliderVerified.value || !sliderChallenge.value || sliderPosition.value == null) {
+    ElMessage.warning('请先完成图块滑动验证')
     return
   }
   registering.value = true
@@ -392,7 +399,7 @@ async function doRegister() {
     user.value = data.userInfo
     await loadApplication()
     await loadNotifications()
-    registerForm.value = { name: '', phone: '', password: '' }
+    registerForm.value = { name: '', phone: '', password: '', confirmPassword: '' }
     sliderChallenge.value = null
     sliderVerified.value = false
     sliderPosition.value = null
