@@ -28,14 +28,14 @@
     </div>
 
     <!-- 未登录 -->
-    <div v-if="!isLoggedIn" class="card empty-card">
+    <div v-if="!isLoggedIn()" class="card empty-card">
       <p>请先在首页完成登录或注册后再报名</p>
       <el-button type="primary" @click="$router.push('/')">返回首页</el-button>
     </div>
 
     <template v-else>
       <!-- 已报名：状态卡 -->
-      <section v-if="application" class="card application-card progress-card">
+      <section v-if="application && !editing" class="card application-card progress-card">
         <div class="card-heading">
           <div>
             <p class="card-kicker">APPLICATION</p>

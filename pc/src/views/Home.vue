@@ -81,7 +81,7 @@
     </el-dialog>
 
     <el-dialog v-model="registerVisible" title="用户注册" width="min(460px, calc(100vw - 32px))" :close-on-click-modal="false">
-      <el-form label-width="72px" @submit.prevent="doRegister">
+      <el-form label-width="80px" class="register-form" @submit.prevent="doRegister">
         <el-form-item label="姓名" required>
           <el-input v-model="registerForm.name" maxlength="64" placeholder="请输入真实姓名" autocomplete="name" />
         </el-form-item>
@@ -503,6 +503,7 @@ onMounted(async () => {
 }
 .welcome-text { font-size: 14px; font-weight: 600; }
 .dialog-footer-spacer { flex: 1; }
+.register-form :deep(.el-form-item__label) { white-space: nowrap; }
 .notification-badge { display: inline-flex; }
 .notification-trigger { color: #fff !important; font-size: 18px; }
 .notification-badge :deep(.el-badge__content.is-dot) { top: 3px; right: 3px; border: 2px solid #6a8dff; }
