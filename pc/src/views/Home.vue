@@ -9,7 +9,7 @@
           <p class="hero-sub">加入我们，让每一份热爱都有回响</p>
           <div class="hero-actions">
             <el-button type="primary" size="large" @click="$router.push('/apply')">立即报名</el-button>
-            <el-button size="large" plain @click="$router.push('/user')">我的申请</el-button>
+            <el-button size="large" plain @click="goToUser">我的申请</el-button>
           </div>
         </div>
         <div v-if="countdownText" class="countdown card">
@@ -47,12 +47,12 @@
                   <div class="notification-item-time">{{ formatSmartTime(item.createdAt) }}</div>
                 </article>
               </div>
-              <el-button v-if="user" link type="primary" class="notification-more" @click="$router.push('/user')">查看全部通知 →</el-button>
+              <el-button v-if="user && isLoggedIn()" link type="primary" class="notification-more" @click="$router.push('/user')">查看全部通知 →</el-button>
             </div>
           </el-popover>
-          <template v-if="user">
+          <template v-if="user && isLoggedIn()">
             <span class="welcome-text">你好！{{ user.name }}同学</span>
-            <el-button size="small" plain @click="$router.push('/user')">个人中心</el-button>
+            <el-button size="small" plain @click="goToUser">个人中心</el-button>
             <el-button size="small" text class="logout-button" @click="handleLogout">退出</el-button>
           </template>
           <template v-else>
@@ -151,6 +151,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Bell, Check } from '@element-plus/icons-vue'
 import { getSystemConfig, getUserInfo, isLoggedIn, login, logout, register } from '../api/auth.js'
@@ -159,6 +160,7 @@ import { getMyNotifications, getPublicNotifications, markNotificationsRead } fro
 import { formatSmartTime } from '../utils/format.js'
 import { getTimelineStages } from '../utils/timeline.js'
 
+const router = useRouter()
 const config = ref({})
 const departments = ref([])
 const currentTime = ref(Date.now())
@@ -227,6 +229,14 @@ function calcCountdown() {
   } else {
     isOpen.value = false
     countdownText.value = '已结束'
+  }
+}
+
+function goToUser() {
+  if (isLoggedIn()) {
+    router.push('/user')
+  } else {
+    loginVisible.value = true
   }
 }
 

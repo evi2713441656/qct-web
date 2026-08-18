@@ -27,6 +27,9 @@ const router = createRouter({
 })
 
 router.beforeEach((to) => {
+  if (to.path === '/user' && !localStorage.getItem('userToken')) {
+    return '/'
+  }
   if (to.path.startsWith('/admin') && to.path !== '/admin/login') {
     if (!localStorage.getItem('adminToken')) return '/admin/login'
   }

@@ -4,10 +4,10 @@
       <el-button link @click="$router.push('/')">← 返回首页</el-button>
       <h1>个人中心</h1>
       <el-button link type="primary" @click="$router.push('/apply')">我的申请</el-button>
-      <el-button link type="danger" @click="handleLogout">退出登录</el-button>
+      <el-button v-if="loggedIn" link type="danger" @click="handleLogout">退出登录</el-button>
     </header>
 
-    <div v-if="!isLoggedIn" class="card empty-card">
+    <div v-if="!loggedIn" class="card empty-card">
       <p>请先登录</p>
       <el-button type="primary" @click="$router.push('/apply')">去登录</el-button>
     </div>
@@ -132,6 +132,7 @@ import { getTimelineStages } from '../utils/timeline.js'
 
 const router = useRouter()
 const user = ref(getUserInfo())
+const loggedIn = ref(isLoggedIn())
 const application = ref(null)
 const notifications = ref([])
 const systemConfig = ref({})
@@ -186,11 +187,13 @@ const handleLogout = async () => {
     return
   }
   logout()
+  loggedIn.value = false
   ElMessage.success('已退出登录')
   router.push('/')
 }
 
 onMounted(() => {
+  if (!loggedIn.value) return
   loadApplication().then(loadNotifications)
   loadSystemConfig()
   setInterval(() => {
