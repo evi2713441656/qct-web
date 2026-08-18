@@ -6,42 +6,46 @@
         <h1>{{ hasApplied ? '我的申请' : '报名申请' }}</h1>
       </div>
       <div v-if="user" class="user-chip">
-        {{ user.name }}（{{ user.student_id }}）
+        {{ user.name }}（{{ user.phone }}）
         <el-button link type="primary" @click="$router.push('/user')">个人中心</el-button>
-        <el-button v-if="!isLoggedIn" link type="primary" @click="showLoginDialog">登录</el-button>
       </div>
     </header>
 
-    <!-- 登录弹窗 -->
-    <el-dialog v-model="loginVisible" title="登录" width="360px">
-      <el-form label-width="70px" @submit.prevent="doLogin">
-        <el-form-item label="学号" required>
-          <el-input v-model="loginForm.studentId" placeholder="请输入学号" />
-        </el-form-item>
-        <el-form-item label="姓名" required>
-          <el-input v-model="loginForm.name" placeholder="请输入姓名" />
-        </el-form-item>
-      </el-form>
-      <template #footer>
-        <el-button type="primary" :loading="loggingIn" @click="doLogin">登录</el-button>
-      </template>
-    </el-dialog>
+    <div v-if="celebrationVisible" class="celebration-overlay" aria-live="polite">
+      <div class="celebration-toast">恭喜你，成功录取！</div>
+      <span
+        v-for="piece in celebrationPieces"
+        :key="piece.id"
+        class="celebration-piece"
+        :style="{
+          '--dx': `${piece.dx}px`,
+          '--delay': `${piece.delay}ms`,
+          '--duration': `${piece.duration}ms`,
+          '--rotation': `${piece.rotation}deg`,
+          '--piece-color': piece.color
+        }"
+      ></span>
+    </div>
 
     <!-- 未登录 -->
     <div v-if="!isLoggedIn" class="card empty-card">
-      <p>请先登录后报名</p>
-      <el-button type="primary" @click="showLoginDialog">立即登录</el-button>
+      <p>请先在首页完成登录或注册后再报名</p>
+      <el-button type="primary" @click="$router.push('/')">返回首页</el-button>
     </div>
 
     <template v-else>
       <!-- 已报名：状态卡 -->
-      <div v-if="application" class="card" style="margin-bottom: 16px;">
-        <h2 class="section-title">报名进度</h2>
-        <el-descriptions :column="2" border size="small" style="margin-bottom: 16px;">
-          <el-descriptions-item label="状态">
-            <span :class="'status-' + application.status" style="font-weight: 600;">
-              {{ getStatusText(application.status) }}
-            </span>
+      <section v-if="application" class="card application-card progress-card">
+        <div class="card-heading">
+          <div>
+            <p class="card-kicker">APPLICATION</p>
+            <h2>报名进度</h2>
+          </div>
+          <span :class="['status-pill', 'status-' + application.status]">{{ getStatusText(application.status) }}</span>
+        </div>
+        <el-descriptions class="application-descriptions summary-descriptions" :column="2" border>
+          <el-descriptions-item label="当前状态">
+            <span :class="['status-pill', 'status-' + application.status]">{{ getStatusText(application.status) }}</span>
           </el-descriptions-item>
           <el-descriptions-item label="意向部门">{{ listText(application.departments) }}</el-descriptions-item>
           <el-descriptions-item label="报名时间">{{ formatTime(application.applyTime) }}</el-descriptions-item>
@@ -53,7 +57,7 @@
         <!-- 一面信息 -->
         <div v-if="firstInfo.visible" class="interview-block">
           <h3 class="interview-title">一面信息</h3>
-          <el-descriptions :column="3" size="small" border>
+          <el-descriptions class="application-descriptions interview-descriptions" :column="3" border>
             <el-descriptions-item label="时间">{{ firstInfo.time }}</el-descriptions-item>
             <el-descriptions-item label="地点">{{ firstInfo.location }}</el-descriptions-item>
             <el-descriptions-item label="签到">
@@ -72,7 +76,7 @@
         <!-- 二面信息 -->
         <div v-if="secondInfo.visible" class="interview-block">
           <h3 class="interview-title">二面信息</h3>
-          <el-descriptions :column="3" size="small" border>
+          <el-descriptions class="application-descriptions interview-descriptions" :column="3" border>
             <el-descriptions-item label="时间">{{ secondInfo.time }}</el-descriptions-item>
             <el-descriptions-item label="地点">{{ secondInfo.location }}</el-descriptions-item>
             <el-descriptions-item label="签到">
@@ -107,11 +111,16 @@
           <el-button @click="startEdit">修改报名信息</el-button>
           <el-button type="danger" plain @click="handleDelete">撤销报名</el-button>
         </div>
-      </div>
+      </section>
 
       <!-- 未报名：报名表单 -->
-      <div v-else class="card">
-        <h2 class="section-title">{{ editing ? '修改报名信息' : '填写报名信息' }}</h2>
+      <section v-else class="card application-card form-card">
+        <div class="card-heading">
+          <div>
+            <p class="card-kicker">APPLICATION</p>
+            <h2>{{ editing ? '修改报名信息' : '填写报名信息' }}</h2>
+          </div>
+        </div>
         <el-form ref="formRef" :model="form" :rules="rules" label-width="90px" class="apply-form" @submit.prevent="handleSubmit">
           <el-row :gutter="16">
             <el-col :xs="24" :sm="12">
@@ -172,7 +181,7 @@
             当前不在报名时间内（{{ formatTime(config.applicationStartTime) }} 至 {{ formatTime(config.applicationEndTime) }}）
           </div>
         </el-form>
-      </div>
+      </section>
     </template>
   </div>
 </template>
@@ -180,7 +189,7 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
-import { login, getUserInfo, isLoggedIn } from '../api/auth.js'
+import { getUserInfo, isLoggedIn } from '../api/auth.js'
 import {
   submitApplication, getApplication, updateApplication, deleteApplication,
   checkIn, selectDepartment, rejectDepartment, updateStatus
@@ -192,10 +201,21 @@ const user = ref(getUserInfo())
 const application = ref(null)
 const hasApplied = computed(() => !!application.value)
 const editing = ref(false)
-
-const loginVisible = ref(false)
-const loggingIn = ref(false)
-const loginForm = ref({ studentId: '', name: '' })
+const celebrationVisible = ref(false)
+const celebrationPieces = [
+  { id: 1, dx: -150, delay: 0, duration: 1500, rotation: -35, color: '#4f6ef7' },
+  { id: 2, dx: -118, delay: 90, duration: 1700, rotation: 28, color: '#2eaa78' },
+  { id: 3, dx: -82, delay: 180, duration: 1450, rotation: -18, color: '#f3a743' },
+  { id: 4, dx: -46, delay: 40, duration: 1600, rotation: 42, color: '#e56b7a' },
+  { id: 5, dx: -12, delay: 130, duration: 1550, rotation: -24, color: '#4f6ef7' },
+  { id: 6, dx: 24, delay: 220, duration: 1750, rotation: 35, color: '#2eaa78' },
+  { id: 7, dx: 58, delay: 70, duration: 1450, rotation: -42, color: '#f3a743' },
+  { id: 8, dx: 94, delay: 170, duration: 1650, rotation: 22, color: '#e56b7a' },
+  { id: 9, dx: 132, delay: 260, duration: 1500, rotation: -32, color: '#4f6ef7' },
+  { id: 10, dx: -102, delay: 310, duration: 1750, rotation: 38, color: '#f3a743' },
+  { id: 11, dx: -28, delay: 360, duration: 1600, rotation: -18, color: '#2eaa78' },
+  { id: 12, dx: 42, delay: 330, duration: 1700, rotation: 28, color: '#e56b7a' }
+]
 
 const formRef = ref()
 const submitting = ref(false)
@@ -244,7 +264,8 @@ const passedDepartments = computed(() => {
 function interviewInfo(type) {
   const iv = type === 'first' ? firstInterview.value : secondInterview.value
   const cfg = (config.value.interviewConfig || {})[type === 'first' ? 'firstInterview' : 'secondInterview']
-  if (!cfg || !cfg.isSet) {
+  const configured = !!(cfg && cfg.date && cfg.time && cfg.location)
+  if (!configured) {
     return { visible: false, canCheckIn: false, time: '-', location: '-', passed: false }
   }
   const status = application.value.status
@@ -256,7 +277,7 @@ function interviewInfo(type) {
     visible: waiting || done,
     canCheckIn,
     passed,
-    time: `${cfg.date || ''} ${cfg.time || ''}`.trim() || '-',
+    time: `${cfg.date || ''} ${cfg.time || ''}${cfg.endTime ? ` 至 ${cfg.endTime}` : ''}`.trim() || '-',
     location: cfg.location || '-'
   }
 }
@@ -273,28 +294,6 @@ const canEdit = computed(() => {
   return deadline ? Date.now() <= new Date(deadline).getTime() : true
 })
 
-const doLogin = async () => {
-  if (!loginForm.value.studentId || !loginForm.value.name) {
-    ElMessage.warning('请输入学号和姓名')
-    return
-  }
-  loggingIn.value = true
-  try {
-    const data = await login(loginForm.value.studentId, loginForm.value.name)
-    user.value = data.userInfo
-    loginVisible.value = false
-    ElMessage.success('登录成功')
-    await loadApplication()
-  } catch (e) {
-    ElMessage.error(e.message)
-  } finally {
-    loggingIn.value = false
-  }
-}
-
-const showLoginDialog = () => {
-  loginVisible.value = true
-}
 
 const loadApplication = async () => {
   if (!isLoggedIn()) return
@@ -313,6 +312,9 @@ const loadApplication = async () => {
         introduction: application.value.introduction || '',
         hasConsented: true
       }
+    } else {
+      form.value.name = user.value?.name || ''
+      form.value.phone = user.value?.phone || ''
     }
   } catch (e) {
     // 无申请时后端可能报错，视为未报名
@@ -407,6 +409,8 @@ const handleSelectDepartment = async () => {
   }
   try {
     await selectDepartment(application.value._id, selectedDepartment.value, user.value._id)
+    celebrationVisible.value = true
+    window.setTimeout(() => { celebrationVisible.value = false }, 2600)
     ElMessage.success('恭喜您成功加入我们！')
     await loadApplication()
   } catch (e) {
@@ -449,31 +453,170 @@ onMounted(async () => {
 </script>
 
 <style scoped>
+.apply-page {
+  min-height: calc(100vh - 1px);
+  background: #f7f9fc;
+}
 .page-header {
   display: flex;
   justify-content: space-between;
   align-items: center;
   flex-wrap: wrap;
   gap: 8px;
-  margin-bottom: 16px;
+  margin-bottom: 20px;
 }
 .page-header-left { display: flex; align-items: center; gap: 4px; }
-.page-header h1 { font-size: 20px; margin: 0; }
-.user-chip { color: var(--text-regular); font-size: 13px; }
-.apply-form { max-width: 760px; }
-.interview-block {
-  background: #f8f9fc;
-  border-radius: 8px;
-  padding: 14px;
-  margin-top: 12px;
+.page-header h1 { color: #33415c; font-size: 22px; margin: 0; letter-spacing: 0.02em; }
+.celebration-overlay {
+  position: fixed;
+  z-index: 3000;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
 }
-.interview-title { margin: 0 0 10px; font-size: 15px; }
-.checked-in { color: var(--success); font-weight: 600; }
-.muted { color: var(--text-secondary); font-size: 12px; }
-.pass-tip { color: var(--success); margin-top: 10px; font-size: 13px; }
-.fail-tip { color: var(--danger); margin-top: 10px; font-size: 13px; }
-.action-row { margin-top: 16px; display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
-.action-label { font-size: 14px; }
+.celebration-toast {
+  position: absolute;
+  top: 35%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 14px 22px;
+  border: 1px solid #d9e3fa;
+  border-radius: 10px;
+  color: #315fc9;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 8px 22px rgba(43, 76, 145, 0.16);
+  font-size: 20px;
+  font-weight: 700;
+  animation: celebration-toast-in 0.35s ease-out both;
+}
+.celebration-piece {
+  position: absolute;
+  top: 34%;
+  left: 50%;
+  width: 7px;
+  height: 14px;
+  border-radius: 2px;
+  background: var(--piece-color);
+  opacity: 0;
+  animation: celebration-fall var(--duration) cubic-bezier(0.2, 0.75, 0.35, 1) var(--delay) both;
+}
+@keyframes celebration-toast-in {
+  from { opacity: 0; transform: translate(-50%, -42%) scale(0.94); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes celebration-fall {
+  0% { opacity: 0; transform: translate(-50%, -10px) rotate(0); }
+  16% { opacity: 1; }
+  100% { opacity: 0; transform: translate(calc(-50% + var(--dx)), 210px) rotate(var(--rotation)); }
+}
+.user-chip {
+  padding: 7px 12px;
+  border: 1px solid #e1e7f0;
+  border-radius: 20px;
+  color: #52627c;
+  font-size: 13px;
+  background: #fff;
+}
+.application-card,
+.empty-card {
+  margin-bottom: 18px;
+  padding: 24px;
+  border: 1px solid #e7ebf2;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 2px 5px rgba(33, 52, 82, 0.08), 0 8px 18px rgba(33, 52, 82, 0.04);
+}
+.card-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.card-heading h2 { margin: 2px 0 0; color: #33415c; font-size: 19px; }
+.card-kicker {
+  margin: 0;
+  color: #8a9ab4;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+}
+.application-descriptions { margin-top: 14px; }
+:deep(.application-descriptions .el-descriptions__body) { background: transparent; }
+:deep(.application-descriptions .el-descriptions__table) { border-color: #e4e9f1; }
+:deep(.application-descriptions .el-descriptions__cell) {
+  padding: 12px 14px;
+  border-color: #e4e9f1 !important;
+  background: #fff !important;
+}
+:deep(.application-descriptions .el-descriptions__label.el-descriptions__cell.is-bordered-label) {
+  width: 88px;
+  color: #64748b;
+  background: #f5f7fb !important;
+  font-size: 12px;
+  font-weight: 600;
+}
+:deep(.application-descriptions .el-descriptions__content.el-descriptions__cell.is-bordered-content) {
+  color: #334155;
+  font-size: 13px;
+  font-weight: 600;
+}
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  min-height: 26px;
+  padding: 0 11px;
+  border-radius: 999px;
+  color: #3f5fc8;
+  background: #e9efff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.status-accepted,
+.status-department_selection { color: #269b72; }
+.status-first_failed,
+.status-second_failed,
+.status-first_reject,
+.status-rejected { color: #d15c69; }
+.interview-block {
+  margin-top: 18px;
+  padding: 18px;
+  border: 1px solid #e5eaf2;
+  border-radius: 10px;
+  background: #f9fbfe;
+}
+.interview-title { margin: 0 0 6px; color: #40506c; font-size: 15px; }
+.interview-descriptions { margin-top: 2px; }
+.checked-in { color: #2eaa7e; font-weight: 700; }
+.muted { color: #8491a8; font-size: 12px; }
+.pass-tip, .fail-tip {
+  margin-top: 10px;
+  padding: 9px 11px;
+  border-radius: 8px;
+  font-size: 13px;
+}
+.pass-tip { color: #24926a; background: rgba(99, 194, 150, 0.12); }
+.fail-tip { color: #cb5664; background: rgba(231, 117, 128, 0.11); }
+.action-row { margin-top: 18px; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
+.action-label { color: #52617b; font-size: 14px; font-weight: 600; }
+.apply-form { max-width: 760px; }
+:deep(.form-card .el-input__wrapper),
+:deep(.form-card .el-textarea__inner) {
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(32, 51, 80, 0.08);
+}
+:deep(.form-card .el-input__wrapper.is-focus),
+:deep(.form-card .el-textarea__inner:focus) { box-shadow: 0 0 0 2px rgba(79, 110, 247, 0.18); }
 .empty-card { text-align: center; padding: 60px 20px; }
-.empty-card p { color: var(--text-secondary); margin-bottom: 16px; }
+.empty-card p { color: #71809a; margin-bottom: 16px; }
+@media (max-width: 640px) {
+  .application-card, .empty-card { padding: 18px 12px; border-radius: 14px; }
+  .page-header h1 { font-size: 19px; }
+  .user-chip { width: 100%; text-align: right; }
+  :deep(.application-descriptions .el-descriptions__table) { border-spacing: 5px; }
+  :deep(.application-descriptions .el-descriptions__cell) { padding: 10px 8px; }
+  :deep(.interview-descriptions .el-descriptions__table) { border-spacing: 4px; }
+  :deep(.interview-descriptions .el-descriptions__cell) { padding: 9px 6px; }
+  .interview-block { padding: 12px; }
+}
 </style>

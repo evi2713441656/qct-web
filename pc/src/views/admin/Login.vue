@@ -60,18 +60,19 @@ const handleLogin = async () => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: linear-gradient(135deg, #4f6ef7 0%, #6a8dff 100%);
+  background: #f6f8fc;
   padding: 16px;
 }
 .login-card {
   width: 380px;
   max-width: 100%;
-  background: #fff;
-  border-radius: 12px;
   padding: 36px 32px;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  border: 1px solid #e5eaf1;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 3px 8px rgba(32, 52, 84, 0.1), 0 12px 28px rgba(32, 52, 84, 0.06);
 }
-.login-card h1 { font-size: 22px; margin: 0 0 4px; text-align: center; }
-.sub { color: var(--text-secondary); text-align: center; font-size: 13px; margin: 0 0 24px; }
+.login-card h1 { color: #27364f; font-size: 22px; margin: 0 0 4px; text-align: center; }
+.sub { color: #718097; text-align: center; font-size: 13px; margin: 0 0 24px; }
 .back-link { text-align: center; margin-top: 16px; }
 </style>

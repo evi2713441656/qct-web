@@ -152,8 +152,8 @@
 
     <!-- 一面通过部门选择 -->
     <el-dialog v-model="passVisible" :title="passBatch ? '批量一面通过' : '一面通过'" width="440px">
-      <p class="muted" style="margin-top: 0;">请选择通过的部门（最多 3 个）</p>
-      <el-checkbox-group v-model="passDepartments" :max="3">
+      <p class="muted" style="margin-top: 0;">请选择通过的部门（最多 2 个）</p>
+      <el-checkbox-group v-model="passDepartments" :max="2">
         <el-checkbox v-for="d in departmentOptions" :key="d" :value="d">{{ d }}</el-checkbox>
       </el-checkbox-group>
       <template #footer>
@@ -199,7 +199,7 @@ const load = async (p) => {
   try {
     const params = {
       page: page.value,
-      pageSize,
+      pageSize: pageSize.value,
       status: filters.value.status !== 'all' ? filters.value.status : undefined,
       department: filters.value.department || undefined
     }
@@ -256,7 +256,11 @@ const failFirst = async (row) => {
 
 const confirmPass = async () => {
   if (!passDepartments.value.length) {
-    ElMessage.warning('请选择通过的部门')
+    ElMessage.warning('请至少选择一个通过部门')
+    return
+  }
+  if (passDepartments.value.length > 2) {
+    ElMessage.warning('一面通过最多选择两个部门')
     return
   }
   try {

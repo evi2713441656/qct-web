@@ -5,7 +5,7 @@
 
       <div class="toolbar">
         <el-radio-group v-model="statusFilter" @change="load()">
-          <el-radio-button value="waiting_second">等待二面</el-radio-button>
+          <el-radio-button value="waiting_second">待确认 / 等待二面</el-radio-button>
           <el-radio-button value="done">二面已结束</el-radio-button>
           <el-radio-button value="all">全部</el-radio-button>
         </el-radio-group>
@@ -66,10 +66,10 @@
 
     <!-- 二面通过部门选择 -->
     <el-dialog v-model="passVisible" :title="batchMode ? '批量二面通过' : '二面通过'" width="440px">
-      <p class="muted" style="margin-top: 0;">请选择通过的部门（最多 3 个）</p>
-      <el-checkbox-group v-model="passDepartments" :max="3">
-        <el-checkbox v-for="d in departmentOptions" :key="d" :value="d">{{ d }}</el-checkbox>
-      </el-checkbox-group>
+      <p class="muted" style="margin-top: 0;">请选择唯一的通过部门</p>
+      <el-radio-group v-model="passDepartment" class="department-radio-group">
+        <el-radio v-for="d in departmentOptions" :key="d" :value="d">{{ d }}</el-radio>
+      </el-radio-group>
       <template #footer>
         <el-button @click="passVisible = false">取消</el-button>
         <el-button type="primary" @click="confirmPass">确认</el-button>
@@ -94,14 +94,15 @@ const statusFilter = ref('waiting_second')
 const selected = ref([])
 const departmentOptions = ref(['策划部', '执行部', '宣传部'])
 const passVisible = ref(false)
-const passDepartments = ref([])
+const passDepartment = ref('')
 const batchMode = ref(false)
 const passTarget = ref(null)
 const notifyVisible = ref(false)
 
 const iv = (row) => row.secondInterview || {}
 
-const SECOND_STATES = ['waiting_second', 'second_failed', 'department_selection', 'accepted', 'rejected']
+// 一面通过后需由学生确认是否参加二面；确认前也应出现在二面候选列表中。
+const SECOND_STATES = ['first_passed', 'waiting_second', 'second_failed', 'department_selection', 'accepted', 'rejected']
 
 const load = async () => {
   try {
@@ -109,9 +110,9 @@ const load = async () => {
     let rows = result.data.list || []
     rows = rows.filter((r) => SECOND_STATES.includes(r.status))
     if (statusFilter.value === 'waiting_second') {
-      rows = rows.filter((r) => r.status === 'waiting_second')
+      rows = rows.filter((r) => ['first_passed', 'waiting_second'].includes(r.status))
     } else if (statusFilter.value === 'done') {
-      rows = rows.filter((r) => r.status !== 'waiting_second')
+      rows = rows.filter((r) => !['first_passed', 'waiting_second'].includes(r.status))
     }
     list.value = rows
   } catch (e) {
@@ -145,28 +146,29 @@ const undoInterviewed = async (row) => {
 const passSecond = (row) => {
   batchMode.value = false
   passTarget.value = row
-  passDepartments.value = []
+  passDepartment.value = ''
   passVisible.value = true
 }
 
 const batchPass = () => {
   batchMode.value = true
-  passDepartments.value = []
+  passDepartment.value = ''
   passVisible.value = true
 }
 
 const confirmPass = async () => {
-  if (!passDepartments.value.length) {
-    ElMessage.warning('请选择通过的部门')
+  if (!passDepartment.value) {
+    ElMessage.warning('请选择唯一的通过部门')
     return
   }
   try {
+    const departments = [passDepartment.value]
     if (batchMode.value) {
       const targets = selected.value.filter((r) => r.status === 'waiting_second')
-      await Promise.all(targets.map((r) => updateStatus(r._id, 'department_selection', { departments: passDepartments.value })))
+      await Promise.all(targets.map((r) => updateStatus(r._id, 'department_selection', { departments })))
       ElMessage.success(`已通过 ${targets.length} 人`)
     } else {
-      await updateStatus(passTarget.value._id, 'department_selection', { departments: passDepartments.value })
+      await updateStatus(passTarget.value._id, 'department_selection', { departments })
       ElMessage.success('已标记二面通过')
     }
     passVisible.value = false
@@ -255,6 +257,8 @@ onMounted(async () => {
 <style scoped>
 .toolbar { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 14px; }
 .muted { color: var(--text-secondary); }
+.department-radio-group { display: flex; flex-direction: column; align-items: flex-start; gap: 10px; }
+:deep(.department-radio-group .el-radio) { margin-right: 0; }
 .batch-bar {
   background: var(--primary-light);
   padding: 8px 12px;

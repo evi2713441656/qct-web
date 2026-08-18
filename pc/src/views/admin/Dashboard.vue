@@ -96,15 +96,20 @@ onMounted(async () => {
 
 <style scoped>
 .stat-card {
-  background: #fff;
-  border-radius: 10px;
-  padding: 18px 14px;
+  position: relative;
+  overflow: hidden;
+  padding: 18px 16px;
+  border: 1px solid #e5eaf1;
   border-top: 3px solid;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  text-align: center;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(32, 52, 84, 0.07), 0 6px 16px rgba(32, 52, 84, 0.035);
+  text-align: left;
+  transition: transform 0.18s ease, box-shadow 0.18s ease;
   margin-bottom: 16px;
 }
-.stat-value { font-size: 26px; font-weight: 700; }
-.stat-label { color: var(--text-secondary); font-size: 13px; margin-top: 4px; }
-.quick-links { display: flex; gap: 12px; flex-wrap: wrap; }
+.stat-card:hover { transform: translateY(-2px); box-shadow: 0 5px 14px rgba(32, 52, 84, 0.11); }
+.stat-value { color: #26364f; font-size: 28px; font-weight: 700; line-height: 1.1; }
+.stat-label { color: #718097; font-size: 13px; margin-top: 7px; }
+.quick-links { display: flex; gap: 10px; flex-wrap: wrap; }
 </style>

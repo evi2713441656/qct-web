@@ -10,14 +10,39 @@ CREATE TABLE IF NOT EXISTS users (
     avatar           VARCHAR(512) NULL,
     gender           VARCHAR(8)   NULL,
     phone            VARCHAR(20)  NULL,
+    password_hash    VARCHAR(256) NULL,
     session_key      VARCHAR(128) NULL,
     last_login_time  BIGINT       NULL,
     last_logout_time BIGINT       NULL,
     created_at       BIGINT       NOT NULL,
     updated_at       BIGINT       NOT NULL,
     UNIQUE KEY uk_users_student_id (student_id),
+    UNIQUE KEY uk_users_phone (phone),
     KEY idx_users_openid (openid)
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci;
+
+-- 兼容已初始化的数据库：应用启动时补充密码登录所需字段与索引。
+SET @add_password_hash = (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE users ADD COLUMN password_hash VARCHAR(256) NULL AFTER phone',
+        'SELECT 1')
+    FROM information_schema.COLUMNS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND COLUMN_NAME = 'password_hash'
+);
+PREPARE add_password_hash_statement FROM @add_password_hash;
+EXECUTE add_password_hash_statement;
+DEALLOCATE PREPARE add_password_hash_statement;
+
+SET @add_users_phone_index = (
+    SELECT IF(COUNT(*) = 0,
+        'ALTER TABLE users ADD UNIQUE INDEX uk_users_phone (phone)',
+        'SELECT 1')
+    FROM information_schema.STATISTICS
+    WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = 'users' AND INDEX_NAME = 'uk_users_phone'
+);
+PREPARE add_users_phone_index_statement FROM @add_users_phone_index;
+EXECUTE add_users_phone_index_statement;
+DEALLOCATE PREPARE add_users_phone_index_statement;
 
 CREATE TABLE IF NOT EXISTS admins (
     id               VARCHAR(40)  NOT NULL PRIMARY KEY,

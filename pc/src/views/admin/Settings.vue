@@ -28,8 +28,11 @@
               <el-form-item label="日期">
                 <el-date-picker v-model="first.date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" />
               </el-form-item>
-              <el-form-item label="时间">
+              <el-form-item label="开始时间">
                 <el-time-picker v-model="first.time" format="HH:mm" value-format="HH:mm" style="width: 100%;" />
+              </el-form-item>
+              <el-form-item label="结束时间">
+                <el-time-picker v-model="first.endTime" format="HH:mm" value-format="HH:mm" style="width: 100%;" />
               </el-form-item>
               <el-form-item label="地点">
                 <el-input v-model="first.location" />
@@ -47,8 +50,11 @@
               <el-form-item label="日期">
                 <el-date-picker v-model="second.date" type="date" value-format="YYYY-MM-DD" style="width: 100%;" />
               </el-form-item>
-              <el-form-item label="时间">
+              <el-form-item label="开始时间">
                 <el-time-picker v-model="second.time" format="HH:mm" value-format="HH:mm" style="width: 100%;" />
+              </el-form-item>
+              <el-form-item label="结束时间">
+                <el-time-picker v-model="second.endTime" format="HH:mm" value-format="HH:mm" style="width: 100%;" />
               </el-form-item>
               <el-form-item label="地点">
                 <el-input v-model="second.location" />
@@ -142,6 +148,7 @@ const save = async () => {
         firstInterview: {
           date: first.value.date || '',
           time: first.value.time || '',
+          endTime: first.value.endTime || '',
           location: first.value.location || '',
           isSet: !!(first.value.date && first.value.time && first.value.location),
           checkInEnabled: !!first.value.checkInEnabled
@@ -149,6 +156,7 @@ const save = async () => {
         secondInterview: {
           date: second.value.date || '',
           time: second.value.time || '',
+          endTime: second.value.endTime || '',
           location: second.value.location || '',
           isSet: !!(second.value.date && second.value.time && second.value.location),
           checkInEnabled: !!second.value.checkInEnabled
@@ -184,8 +192,8 @@ onMounted(async () => {
     Object.assign(config.recruitmentTime, d.recruitmentTime || {})
     const ic = d.interviewConfig || {}
     config.interviewConfig = {
-      firstInterview: { date: '', time: '', location: '', isSet: false, checkInEnabled: false, ...(ic.firstInterview || {}) },
-      secondInterview: { date: '', time: '', location: '', isSet: false, checkInEnabled: false, ...(ic.secondInterview || {}) }
+      firstInterview: { date: '', time: '', endTime: '', location: '', isSet: false, checkInEnabled: false, ...(ic.firstInterview || {}) },
+      secondInterview: { date: '', time: '', endTime: '', location: '', isSet: false, checkInEnabled: false, ...(ic.secondInterview || {}) }
     }
     config.departmentDetails = d.departmentDetails || {}
     if (deptKeys.value.length) activeDept.value = deptKeys.value[0]
@@ -197,10 +205,11 @@ onMounted(async () => {
 
 <style scoped>
 .interview-config {
-  background: #f8f9fc;
-  border-radius: 8px;
-  padding: 14px;
+  padding: 18px;
+  border: 1px solid #e5eaf1;
+  border-radius: 10px;
+  background: #f8faff;
   margin-bottom: 12px;
 }
-.interview-config h3 { margin: 0 0 12px; font-size: 15px; }
+.interview-config h3 { margin: 0 0 14px; color: #33445f; font-size: 15px; }
 </style>

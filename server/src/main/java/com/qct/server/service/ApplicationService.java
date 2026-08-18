@@ -357,9 +357,6 @@ public class ApplicationService {
 
     private Map<String, Object> updateApplicationStatus(Map<String, Object> event) {
         AuthContext.Context ctx = AuthContext.get();
-        if (!ctx.hasAdmin()) {
-            throw new BizException("无权操作");
-        }
         String applicationId = str(event.get("applicationId"));
         String status = str(event.get("status"));
         if (applicationId == null || applicationId.isBlank() || status == null || status.isBlank()) {
@@ -375,6 +372,16 @@ public class ApplicationService {
         }
         String currentStatus = str(app.get("status"));
 
+        // 管理员可处理全部状态流转；学生仅能确认或拒绝本人已通过的一面邀请。
+        if (!ctx.hasAdmin()) {
+            boolean isOwner = ctx.hasUser() && ctx.userId.equals(str(app.get("user_id")));
+            boolean canConfirmSecond = "first_passed".equals(currentStatus) && "waiting_second".equals(status);
+            boolean canRejectSecond = "first_passed".equals(currentStatus) && "first_reject".equals(status);
+            if (!isOwner || (!canConfirmSecond && !canRejectSecond)) {
+                throw new BizException("无权操作");
+            }
+        }
+
         Map<String, Object> update = new LinkedHashMap<>();
         update.put("status", status);
         long now = Times.now();
@@ -388,6 +395,13 @@ public class ApplicationService {
 
         List<String> departments = toStringList(extra.get("departments"));
         String feedback = str(extra.get("feedback")) == null ? "" : str(extra.get("feedback"));
+
+        if ("first_passed".equals(status) && (departments.isEmpty() || departments.size() > 2)) {
+            throw new BizException("一面通过必须选择 1-2 个部门");
+        }
+        if ("department_selection".equals(status) && departments.size() != 1) {
+            throw new BizException("二面通过必须且只能选择 1 个部门");
+        }
 
         switch (status) {
             case "waiting_first": {
@@ -691,13 +705,13 @@ public class ApplicationService {
         Map<String, Object> interviewConfig = asMap(interviewConfigObj);
         Map<String, Object> interviewInfo = asMap(interviewConfig.get(interviewType + "Interview"));
 
-        if (interviewInfo.isEmpty() || !Boolean.TRUE.equals(interviewInfo.get("isSet"))) {
-            throw new BizException("面试时间和地点尚未设置，无法开启签到");
-        }
-        if (interviewInfo.get("date") == null || interviewInfo.get("time") == null || interviewInfo.get("location") == null
+        // 以实际日期、开始时间和地点为准，兼容旧配置中遗漏 isSet 标记的情况。
+        if (interviewInfo.isEmpty()
+                || str(interviewInfo.get("date")) == null || str(interviewInfo.get("time")) == null
+                || str(interviewInfo.get("location")) == null
                 || str(interviewInfo.get("date")).isBlank() || str(interviewInfo.get("time")).isBlank()
                 || str(interviewInfo.get("location")).isBlank()) {
-            throw new BizException("面试时间或地点信息不完整，无法开启签到");
+            throw new BizException("面试时间或地点尚未完整设置，无法开启签到");
         }
         if (!Boolean.TRUE.equals(interviewInfo.get("checkInEnabled"))) {
             throw new BizException("签到功能未开启");
@@ -1006,6 +1020,9 @@ public class ApplicationService {
             Map<String, Object> result = new LinkedHashMap<>();
             map.forEach((k, v) -> result.put(String.valueOf(k), v));
             return result;
+        }
+        if (value instanceof String json && !json.isBlank()) {
+            return Json.parseObject(json);
         }
         return new LinkedHashMap<>();
     }
