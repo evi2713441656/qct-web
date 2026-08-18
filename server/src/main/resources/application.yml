@@ -18,12 +18,5 @@ qct:
   jwt-secret: ${QCT_JWT_SECRET:qct-web-server-jwt-secret-2026}
   # token 有效期（小时）
   token-expire-hours: 168
-  sms:
-    # 未配置短信服务商时关闭，注册页自动使用图块滑动验证。
-    # 仅在本地联调短信流程时可临时设为 true。
-    mock: ${QCT_SMS_MOCK:false}
-    # 配置 webhook 后，注册页显示短信验证码；具体请求格式见 SmsCodeService。
-    webhook-url: ${QCT_SMS_WEBHOOK_URL:}
-    webhook-token: ${QCT_SMS_WEBHOOK_TOKEN:}
   # 允许跨域的来源（* 表示全部）
   cors-allowed-origin: "*"

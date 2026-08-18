@@ -26,9 +26,7 @@ server/  Spring Boot 后端（替代 uniCloud 云函数，接口/返回结构与
    ```
 3. 默认管理员：`admin / admin123`（登录后请立即修改）。
 
-环境变量（`application.yml` 均有默认值）：`MYSQL_HOST/MYSQL_PORT/MYSQL_DB/MYSQL_USER/MYSQL_PASSWORD/QCT_JWT_SECRET/QCT_TOKEN_EXPIRE_HOURS/QCT_SMS_MOCK/QCT_SMS_WEBHOOK_URL/QCT_SMS_WEBHOOK_TOKEN/CORS...`。
-
-未配置短信服务商时，注册页使用后端挑战的图块滑动验证；如需短信验证码，请设置 `QCT_SMS_WEBHOOK_URL` 和 `QCT_SMS_WEBHOOK_TOKEN`。本地联调短信流程时可临时设置 `QCT_SMS_MOCK=true`。webhook 请求体为 `{ "phone": "手机号", "code": "6位验证码", "template": "qct_register" }`。
+环境变量（`application.yml` 均有默认值）：`MYSQL_HOST/MYSQL_PORT/MYSQL_DB/MYSQL_USER/MYSQL_PASSWORD/QCT_JWT_SECRET/QCT_TOKEN_EXPIRE_HOURS/CORS...`。
 
 ### 前端（pc/）
 
@@ -49,7 +47,7 @@ npm run build    # 生产构建，产物 dist/
 ## 功能
 
 - 学生端（`pc/` 首页/报名/个人中心，可手机访问）：
-  - 手机号 + 密码登录，注册时使用短信验证码
+  - 学号 + 姓名登录（首次自动注册）
   - 报名表单（姓名/学号/性别/专业班级/宿舍/手机号/意向部门 1-2 个/自我介绍）
   - 进度跟踪、一面/二面签到、公布面试时间后进入对应等待阶段、二面通过后选择部门
   - 通知消息（首页右上角信息提示、未读红点、个人中心通知）
