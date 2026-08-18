@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
-import java.nio.charset.StandardCharsets;
+
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -26,13 +26,16 @@ import java.util.Map;
 public class AuthService {
 
     private final JdbcTemplate jdbc;
+    private final SmsCodeService smsCodeService;
     private final String jwtSecret;
     private final long tokenExpireHours;
 
     public AuthService(JdbcTemplate jdbc,
+                       SmsCodeService smsCodeService,
                        @Value("${qct.jwt-secret}") String jwtSecret,
                        @Value("${qct.token-expire-hours:168}") long tokenExpireHours) {
         this.jdbc = jdbc;
+        this.smsCodeService = smsCodeService;
         this.jwtSecret = jwtSecret;
         this.tokenExpireHours = tokenExpireHours;
     }
@@ -41,6 +44,12 @@ public class AuthService {
         String type = str(event.get("type"));
         try {
             switch (type == null ? "" : type) {
+                case "registration_options":
+                    return registrationOptions();
+                case "slider_challenge":
+                    return smsCodeService.createSliderChallenge();
+                case "send_sms_code":
+                    return sendSmsCode(event);
                 case "register":
                     return register(event);
                 case "login":
@@ -61,11 +70,31 @@ public class AuthService {
         }
     }
 
-    /** 普通用户注册：姓名 + 手机号 + 密码。 */
+    private Map<String, Object> registrationOptions() {
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("smsEnabled", smsCodeService.isSmsEnabled());
+        data.put("fallback", smsCodeService.isSmsEnabled() ? "sms" : "slider");
+        return R.ok(data);
+    }
+
+    /** 发送注册短信验证码。 */
+    private Map<String, Object> sendSmsCode(Map<String, Object> event) {
+        if (!smsCodeService.isSmsEnabled()) {
+            throw new BizException("短信服务未配置，请使用图块滑动验证");
+        }
+        return smsCodeService.sendCode(requirePhone(event));
+    }
+
+    /** 普通用户注册：姓名 + 手机号 + 密码 + 短信验证码。 */
     private Map<String, Object> register(Map<String, Object> event) {
         String name = requireName(event);
         String phone = requirePhone(event);
         String password = requirePassword(event);
+        if (smsCodeService.isSmsEnabled()) {
+            smsCodeService.verify(phone, str(event.get("verificationCode")));
+        } else {
+            smsCodeService.verifySlider(str(event.get("sliderChallengeId")), event.get("sliderPosition"));
+        }
 
         if (!jdbc.queryForList("SELECT id FROM users WHERE phone = ?", phone).isEmpty()) {
             throw new BizException("该手机号已注册，请直接登录");

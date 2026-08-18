@@ -8,7 +8,7 @@
           <h1>青创通 · 招新系统</h1>
           <p class="hero-sub">加入我们，让每一份热爱都有回响</p>
           <div class="hero-actions">
-            <el-button type="primary" size="large" @click="$router.push('/apply')">立即报名</el-button>
+            <el-button type="primary" size="large" @click="goToApply">立即报名</el-button>
             <el-button size="large" plain @click="goToUser">我的申请</el-button>
           </div>
         </div>
@@ -57,7 +57,7 @@
           </template>
           <template v-else>
             <el-button size="small" plain @click="loginVisible = true">登录</el-button>
-            <el-button size="small" type="primary" @click="registerVisible = true">注册</el-button>
+            <el-button size="small" type="primary" @click="openRegister">注册</el-button>
           </template>
         </div>
       </div>
@@ -73,6 +73,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
+        <el-button link type="primary" @click="switchToRegister">还没有账号？立即注册</el-button>
+        <span class="dialog-footer-spacer"></span>
         <el-button @click="loginVisible = false">取消</el-button>
         <el-button type="primary" :loading="loggingIn" @click="doLogin">登录</el-button>
       </template>
@@ -85,6 +87,24 @@
         </el-form-item>
         <el-form-item label="手机号" required>
           <el-input v-model="registerForm.phone" inputmode="numeric" maxlength="11" placeholder="请输入手机号" autocomplete="tel" />
+        </el-form-item>
+        <template v-if="smsEnabled">
+          <el-form-item label="验证码" required>
+            <div class="verification-row">
+              <el-input v-model="registerForm.verificationCode" inputmode="numeric" maxlength="6" placeholder="请输入短信验证码" autocomplete="one-time-code" />
+              <el-button :disabled="codeCountdown > 0" :loading="sendingCode" @click="handleSendCode">
+                {{ codeCountdown > 0 ? `${codeCountdown}s 后重发` : '获取验证码' }}
+              </el-button>
+            </div>
+          </el-form-item>
+        </template>
+        <el-form-item v-else label="安全验证" required>
+          <SliderCaptcha
+            v-model="sliderVerified"
+            :challenge="sliderChallenge"
+            @verified="sliderPosition = $event"
+            @refresh="loadSliderChallenge"
+          />
         </el-form-item>
         <el-form-item label="密码" required>
           <el-input v-model="registerForm.password" type="password" show-password placeholder="字母和数字组合" autocomplete="new-password" @keyup.enter="doRegister" />
@@ -150,15 +170,19 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Bell, Check } from '@element-plus/icons-vue'
-import { getSystemConfig, getUserInfo, isLoggedIn, login, logout, register } from '../api/auth.js'
+import {
+  getRegistrationOptions, getSliderChallenge, getSystemConfig, getUserInfo,
+  isLoggedIn, login, logout, register, sendSmsCode
+} from '../api/auth.js'
 import { getApplication } from '../api/application.js'
 import { getMyNotifications, getPublicNotifications, markNotificationsRead } from '../api/notification.js'
 import { formatSmartTime } from '../utils/format.js'
 import { getTimelineStages } from '../utils/timeline.js'
+import SliderCaptcha from '../components/SliderCaptcha.vue'
 
 const router = useRouter()
 const config = ref({})
@@ -170,8 +194,15 @@ const loginVisible = ref(false)
 const registerVisible = ref(false)
 const loggingIn = ref(false)
 const registering = ref(false)
+const sendingCode = ref(false)
+const codeCountdown = ref(0)
+const smsEnabled = ref(false)
+const sliderChallenge = ref(null)
+const sliderVerified = ref(false)
+const sliderPosition = ref(null)
+let codeTimer = null
 const loginForm = ref({ phone: '', password: '' })
-const registerForm = ref({ name: '', phone: '', password: '' })
+const registerForm = ref({ name: '', phone: '', verificationCode: '', password: '' })
 const notifications = ref([])
 const notificationVisible = ref(false)
 const publicReadIds = ref(readPublicNotificationIds())
@@ -232,11 +263,89 @@ function calcCountdown() {
   }
 }
 
+function goToApply() {
+  if (isLoggedIn()) {
+    router.push('/apply')
+  } else {
+    loginVisible.value = true
+  }
+}
+
 function goToUser() {
   if (isLoggedIn()) {
     router.push('/user')
   } else {
     loginVisible.value = true
+  }
+}
+
+async function openRegister() {
+  loginVisible.value = false
+  registerVisible.value = true
+  await loadRegistrationVerification()
+}
+
+function switchToRegister() {
+  openRegister()
+}
+
+async function loadRegistrationVerification() {
+  try {
+    const result = await getRegistrationOptions()
+    smsEnabled.value = !!result.data?.smsEnabled
+  } catch {
+    // 无法读取服务能力时默认使用滑块验证，避免前端绕过验证。
+    smsEnabled.value = false
+  }
+  if (!smsEnabled.value) {
+    await loadSliderChallenge()
+  }
+}
+
+async function loadSliderChallenge() {
+  sliderVerified.value = false
+  sliderPosition.value = null
+  try {
+    const result = await getSliderChallenge()
+    sliderChallenge.value = result.data || null
+  } catch (error) {
+    sliderChallenge.value = null
+    ElMessage.error(error.message)
+  }
+}
+
+function startCodeCountdown() {
+  window.clearInterval(codeTimer)
+  codeCountdown.value = 60
+  codeTimer = window.setInterval(() => {
+    codeCountdown.value -= 1
+    if (codeCountdown.value <= 0) {
+      window.clearInterval(codeTimer)
+      codeTimer = null
+    }
+  }, 1000)
+}
+
+async function handleSendCode() {
+  const phone = registerForm.value.phone.trim()
+  if (!isValidPhone(phone)) {
+    ElMessage.warning('请输入正确的手机号后再获取验证码')
+    return
+  }
+  sendingCode.value = true
+  try {
+    const result = await sendSmsCode(phone)
+    startCodeCountdown()
+    const debugCode = result.data?.debugCode
+    if (debugCode) {
+      ElMessage.info(`开发模式验证码：${debugCode}`)
+    } else {
+      ElMessage.success('验证码已发送，请注意查收短信')
+    }
+  } catch (error) {
+    ElMessage.error(error.message)
+  } finally {
+    sendingCode.value = false
   }
 }
 
@@ -330,9 +439,18 @@ async function doLogin() {
 }
 
 async function doRegister() {
-  const { name, phone, password } = registerForm.value
+  const { name, phone, verificationCode, password } = registerForm.value
   if (!name.trim() || !isValidPhone(phone)) {
     ElMessage.warning('请输入姓名和正确的手机号')
+    return
+  }
+  if (smsEnabled.value) {
+    if (!/^\d{6}$/.test(verificationCode.trim())) {
+      ElMessage.warning('请输入 6 位短信验证码')
+      return
+    }
+  } else if (!sliderVerified.value || !sliderChallenge.value || sliderPosition.value == null) {
+    ElMessage.warning('请先完成图块滑动验证')
     return
   }
   if (!isValidPassword(password)) {
@@ -341,15 +459,22 @@ async function doRegister() {
   }
   registering.value = true
   try {
-    const data = await register(name.trim(), phone.trim(), password)
+    const captcha = smsEnabled.value
+      ? {}
+      : { sliderChallengeId: sliderChallenge.value.challengeId, sliderPosition: sliderPosition.value }
+    const data = await register(name.trim(), phone.trim(), password, smsEnabled.value ? verificationCode.trim() : '', captcha)
     user.value = data.userInfo
     await loadApplication()
     await loadNotifications()
-    registerForm.value = { name: '', phone: '', password: '' }
+    registerForm.value = { name: '', phone: '', verificationCode: '', password: '' }
+    window.clearInterval(codeTimer)
+    codeTimer = null
+    codeCountdown.value = 0
     registerVisible.value = false
     ElMessage.success('注册成功，已自动登录')
   } catch (error) {
     ElMessage.error(error.message)
+    if (!smsEnabled.value) await loadSliderChallenge()
   } finally {
     registering.value = false
   }
@@ -362,6 +487,10 @@ function handleLogout() {
   loadNotifications()
   ElMessage.success('已退出登录')
 }
+
+onUnmounted(() => {
+  window.clearInterval(codeTimer)
+})
 
 onMounted(async () => {
   try {
@@ -459,6 +588,10 @@ onMounted(async () => {
 .notification-more { display: block; margin: 8px auto 0; }
 .logout-button { color: #fff !important; }
 .password-tip { width: 100%; margin-top: 4px; font-size: 12px; line-height: 1.4; color: var(--text-secondary); }
+.dialog-footer-spacer { flex: 1; }
+.verification-row { display: flex; width: 100%; gap: 8px; }
+.verification-row .el-input { flex: 1; }
+.verification-row .el-button { flex: 0 0 auto; }
 .hero h1 { font-size: 32px; margin: 0 0 8px; }
 .hero-sub { opacity: 0.9; margin: 0 0 24px; }
 .countdown { text-align: center; min-width: 200px; }
