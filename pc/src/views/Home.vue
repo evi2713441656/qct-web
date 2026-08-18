@@ -8,7 +8,7 @@
           <h1>青创通 · 招新系统</h1>
           <p class="hero-sub">加入我们，让每一份热爱都有回响</p>
           <div class="hero-actions">
-            <el-button type="primary" size="large" @click="$router.push('/apply')">立即报名</el-button>
+            <el-button type="primary" size="large" @click="goToApply">立即报名</el-button>
             <el-button size="large" plain @click="goToUser">我的申请</el-button>
           </div>
         </div>
@@ -57,7 +57,7 @@
           </template>
           <template v-else>
             <el-button size="small" plain @click="loginVisible = true">登录</el-button>
-            <el-button size="small" type="primary" @click="registerVisible = true">注册</el-button>
+            <el-button size="small" type="primary" @click="openRegister">注册</el-button>
           </template>
         </div>
       </div>
@@ -73,6 +73,8 @@
         </el-form-item>
       </el-form>
       <template #footer>
+        <el-button link type="primary" @click="openRegister">还没有账号？立即注册</el-button>
+        <span class="dialog-footer-spacer"></span>
         <el-button @click="loginVisible = false">取消</el-button>
         <el-button type="primary" :loading="loggingIn" @click="doLogin">登录</el-button>
       </template>
@@ -85,6 +87,14 @@
         </el-form-item>
         <el-form-item label="手机号" required>
           <el-input v-model="registerForm.phone" inputmode="numeric" maxlength="11" placeholder="请输入手机号" autocomplete="tel" />
+        </el-form-item>
+        <el-form-item label="安全验证" required>
+          <SliderCaptcha
+            v-model="sliderVerified"
+            :challenge="sliderChallenge"
+            @verified="sliderPosition = $event"
+            @refresh="loadSliderChallenge"
+          />
         </el-form-item>
         <el-form-item label="密码" required>
           <el-input v-model="registerForm.password" type="password" show-password placeholder="字母和数字组合" autocomplete="new-password" @keyup.enter="doRegister" />
@@ -154,11 +164,12 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { ElMessage } from 'element-plus'
 import { Bell, Check } from '@element-plus/icons-vue'
-import { getSystemConfig, getUserInfo, isLoggedIn, login, logout, register } from '../api/auth.js'
+import { getSliderChallenge, getSystemConfig, getUserInfo, isLoggedIn, login, logout, register } from '../api/auth.js'
 import { getApplication } from '../api/application.js'
 import { getMyNotifications, getPublicNotifications, markNotificationsRead } from '../api/notification.js'
 import { formatSmartTime } from '../utils/format.js'
 import { getTimelineStages } from '../utils/timeline.js'
+import SliderCaptcha from '../components/SliderCaptcha.vue'
 
 const router = useRouter()
 const config = ref({})
@@ -170,6 +181,9 @@ const loginVisible = ref(false)
 const registerVisible = ref(false)
 const loggingIn = ref(false)
 const registering = ref(false)
+const sliderChallenge = ref(null)
+const sliderVerified = ref(false)
+const sliderPosition = ref(null)
 const loginForm = ref({ phone: '', password: '' })
 const registerForm = ref({ name: '', phone: '', password: '' })
 const notifications = ref([])
@@ -232,11 +246,37 @@ function calcCountdown() {
   }
 }
 
+function goToApply() {
+  if (isLoggedIn()) {
+    router.push('/apply')
+  } else {
+    loginVisible.value = true
+  }
+}
+
 function goToUser() {
   if (isLoggedIn()) {
     router.push('/user')
   } else {
     loginVisible.value = true
+  }
+}
+
+async function openRegister() {
+  loginVisible.value = false
+  registerVisible.value = true
+  await loadSliderChallenge()
+}
+
+async function loadSliderChallenge() {
+  sliderVerified.value = false
+  sliderPosition.value = null
+  try {
+    const result = await getSliderChallenge()
+    sliderChallenge.value = result.data || null
+  } catch (error) {
+    sliderChallenge.value = null
+    ElMessage.error(error.message)
   }
 }
 
@@ -335,21 +375,32 @@ async function doRegister() {
     ElMessage.warning('请输入姓名和正确的手机号')
     return
   }
+  if (!sliderVerified.value || !sliderChallenge.value || sliderPosition.value == null) {
+    ElMessage.warning('请先完成图块滑动验证')
+    return
+  }
   if (!isValidPassword(password)) {
     ElMessage.warning('密码必须同时包含字母和数字')
     return
   }
   registering.value = true
   try {
-    const data = await register(name.trim(), phone.trim(), password)
+    const data = await register(name.trim(), phone.trim(), password, {
+      sliderChallengeId: sliderChallenge.value.challengeId,
+      sliderPosition: sliderPosition.value
+    })
     user.value = data.userInfo
     await loadApplication()
     await loadNotifications()
     registerForm.value = { name: '', phone: '', password: '' }
+    sliderChallenge.value = null
+    sliderVerified.value = false
+    sliderPosition.value = null
     registerVisible.value = false
     ElMessage.success('注册成功，已自动登录')
   } catch (error) {
     ElMessage.error(error.message)
+    await loadSliderChallenge()
   } finally {
     registering.value = false
   }
@@ -444,6 +495,7 @@ onMounted(async () => {
   gap: 8px;
 }
 .welcome-text { font-size: 14px; font-weight: 600; }
+.dialog-footer-spacer { flex: 1; }
 .notification-badge { display: inline-flex; }
 .notification-trigger { color: #fff !important; font-size: 18px; }
 .notification-badge :deep(.el-badge__content.is-dot) { top: 3px; right: 3px; border: 2px solid #6a8dff; }

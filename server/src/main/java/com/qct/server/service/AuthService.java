@@ -11,7 +11,7 @@ import org.springframework.stereotype.Service;
 
 import javax.crypto.SecretKeyFactory;
 import javax.crypto.spec.PBEKeySpec;
-import java.nio.charset.StandardCharsets;
+
 import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.Base64;
@@ -26,13 +26,16 @@ import java.util.Map;
 public class AuthService {
 
     private final JdbcTemplate jdbc;
+    private final SliderCaptchaService sliderCaptchaService;
     private final String jwtSecret;
     private final long tokenExpireHours;
 
     public AuthService(JdbcTemplate jdbc,
+                       SliderCaptchaService sliderCaptchaService,
                        @Value("${qct.jwt-secret}") String jwtSecret,
                        @Value("${qct.token-expire-hours:168}") long tokenExpireHours) {
         this.jdbc = jdbc;
+        this.sliderCaptchaService = sliderCaptchaService;
         this.jwtSecret = jwtSecret;
         this.tokenExpireHours = tokenExpireHours;
     }
@@ -41,6 +44,8 @@ public class AuthService {
         String type = str(event.get("type"));
         try {
             switch (type == null ? "" : type) {
+                case "slider_challenge":
+                    return sliderCaptchaService.createChallenge();
                 case "register":
                     return register(event);
                 case "login":
@@ -61,11 +66,12 @@ public class AuthService {
         }
     }
 
-    /** 普通用户注册：姓名 + 手机号 + 密码。 */
+    /** 普通用户注册：姓名 + 手机号 + 密码 + 图块滑动验证。 */
     private Map<String, Object> register(Map<String, Object> event) {
         String name = requireName(event);
         String phone = requirePhone(event);
         String password = requirePassword(event);
+        sliderCaptchaService.verify(str(event.get("sliderChallengeId")), event.get("sliderPosition"));
 
         if (!jdbc.queryForList("SELECT id FROM users WHERE phone = ?", phone).isEmpty()) {
             throw new BizException("该手机号已注册，请直接登录");

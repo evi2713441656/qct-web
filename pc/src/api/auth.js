@@ -12,9 +12,16 @@ export async function login(phone, password) {
   return saveSession(result.data)
 }
 
-/** 普通用户注册：姓名 + 手机号 + 密码。注册成功后自动登录。 */
-export async function register(name, phone, password) {
-  const result = await callCloudOrThrow('auth', { type: 'register', name, phone, password })
+/** 获取注册图块滑动验证挑战。 */
+export function getSliderChallenge() {
+  return callCloudOrThrow('auth', { type: 'slider_challenge' })
+}
+
+/** 普通用户注册：姓名 + 手机号 + 密码 + 图块滑动验证。 */
+export async function register(name, phone, password, captcha) {
+  const result = await callCloudOrThrow('auth', {
+    type: 'register', name, phone, password, ...captcha
+  })
   return saveSession(result.data)
 }
 
